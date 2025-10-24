@@ -112,10 +112,10 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
   if (!isOpen || !marker) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-gray-800 rounded-lg w-full max-w-2xl min-h-[100vh] sm:min-h-0 sm:max-h-[95vh] overflow-y-auto my-2 sm:my-0">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-700">
           <h2 className="text-xl font-semibold text-white">Edit Marker</h2>
           <button
             onClick={onClose}
@@ -126,9 +126,9 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
         </div>
 
         {/* Form */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Basic Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Title
@@ -188,7 +188,7 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
               />
               
               {formData.images && formData.images.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {formData.images.map((image, index) => (
                     <div key={index} className="relative group">
                       <img
@@ -222,7 +222,7 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Latitude
@@ -265,30 +265,32 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
 
           {/* Custom Fields */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-white">Custom Fields</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Field name"
-                  value={newCustomField.name}
-                  onChange={(e) => setNewCustomField(prev => ({ ...prev, name: e.target.value }))}
-                  className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Value"
-                  value={newCustomField.value}
-                  onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
-                  className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  onClick={handleCustomFieldAdd}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm flex items-center gap-1"
-                >
-                  <Plus size={14} />
-                  Add
-                </button>
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-white mb-3">Custom Fields</h3>
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    placeholder="Field name"
+                    value={newCustomField.name}
+                    onChange={(e) => setNewCustomField(prev => ({ ...prev, name: e.target.value }))}
+                    className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Value"
+                    value={newCustomField.value}
+                    onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
+                    className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    onClick={handleCustomFieldAdd}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -317,16 +319,16 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 p-4 sm:p-6 border-t border-gray-700">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-3 text-gray-400 hover:text-white transition-colors order-2 sm:order-1"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+            className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors order-1 sm:order-2"
           >
             <Save size={16} />
             Save Changes
