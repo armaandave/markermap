@@ -5,6 +5,7 @@ import { useMapStore } from '../store/mapStore';
 import { Folder, Marker } from '../lib/db';
 import { KMLParser } from '../lib/kml-parser';
 import { db } from '../lib/db';
+import { useAuthContext } from './AuthProvider';
 import { 
   Menu, 
   X, 
@@ -17,7 +18,11 @@ import {
   ChevronDown,
   MoreHorizontal,
   Save,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  User,
+  Settings
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,6 +31,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const { user, loading, signInWithGoogle, logout } = useAuthContext();
   const {
     folders,
     markers,
@@ -50,6 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [editFolderName, setEditFolderName] = useState('');
   const [editFolderColor, setEditFolderColor] = useState('#ffffff');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFolderEdit = (folder: Folder) => {
@@ -91,56 +98,91 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const message = `Are you sure you want to delete ALL data?\n\nThis will remove:\n- ${totalMarkers} marker(s)\n- ${totalFolders} folder(s)\n\nThis action cannot be undone.`;
     
     if (confirm(message)) {
-      // Clear all markers from IndexedDB
-      await db.markers.clear();
-      
-      // Clear all folders except default from IndexedDB
-      const defaultFolder = folders.find(f => f.name === 'Default');
-      if (defaultFolder) {
-        await db.folders.clear();
-        await db.folders.add(defaultFolder);
-      } else {
-        await db.folders.clear();
-        // Create default folder if it doesn't exist
-        const newDefaultFolder: Folder = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          name: 'Default',
-          color: '#ffffff',
-          icon: 'folder',
-          visible: true,
-          order: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        await db.folders.add(newDefaultFolder);
+      try {
+        if (user) {
+          // User is logged in - clear from Supabase
+          console.log('🧹 CLEAR ALL - User logged in, clearing from Supabase');
+          
+          // Delete all markers from Supabase
+          const markersResponse = await fetch(`/api/sync/markers?userId=${user.uid}`, {
+            method: 'DELETE',
+          });
+          
+          if (!markersResponse.ok) {
+            throw new Error('Failed to delete markers from Supabase');
+          }
+          
+          // Delete all folders from Supabase (except default)
+          const foldersResponse = await fetch(`/api/sync/folders?userId=${user.uid}`, {
+            method: 'DELETE',
+          });
+          
+          if (!foldersResponse.ok) {
+            throw new Error('Failed to delete folders from Supabase');
+          }
+          
+          console.log('✅ CLEAR ALL - Supabase cleared successfully');
+        } else {
+          // User is logged out - clear from IndexedDB
+          console.log('🧹 CLEAR ALL - User logged out, clearing from IndexedDB');
+          
+          // Clear all markers from IndexedDB
+          await db.markers.clear();
+          
+          // Clear all folders except default from IndexedDB
+          const defaultFolder = folders.find(f => f.name === 'Default');
+          if (defaultFolder) {
+            await db.folders.clear();
+            await db.folders.add(defaultFolder);
+          } else {
+            await db.folders.clear();
+            // Create default folder if it doesn't exist
+            const newDefaultFolder: Folder = {
+              id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+              name: 'Default',
+              color: '#ffffff',
+              icon: 'folder',
+              visible: true,
+              order: 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            await db.folders.add(newDefaultFolder);
+          }
+        }
+        
+        // Clear store state
+        setMarkers([]);
+        
+        // Keep only the default folder
+        const defaultFolder = folders.find(f => f.name === 'Default');
+        if (defaultFolder) {
+          setFolders([defaultFolder]);
+        } else {
+          // Create default folder if it doesn't exist
+          const newDefaultFolder: Folder = {
+            id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+            name: 'Default',
+            color: '#ffffff',
+            icon: 'folder',
+            visible: true,
+            order: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          setFolders([newDefaultFolder]);
+        }
+        
+        // Clear selected states
+        setSelectedMarker(null);
+        setSelectedFolderId(null);
+        
+        alert('All data has been cleared!');
+        
+      } catch (error) {
+        console.error('Failed to clear all data:', error);
+        alert('Failed to clear all data. Please try again.');
       }
-      
-      // Clear all markers
-      setMarkers([]);
-      
-      // Keep only the default folder
-      if (defaultFolder) {
-        setFolders([defaultFolder]);
-      } else {
-        // Create default folder if it doesn't exist
-        const newDefaultFolder: Folder = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          name: 'Default',
-          color: '#ffffff',
-          icon: 'folder',
-          visible: true,
-          order: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        setFolders([newDefaultFolder]);
-      }
-      
-      // Clear selected states
-      setSelectedMarker(null);
-      setSelectedFolderId(null);
-      
-      alert('All data has been cleared!');
     }
   };
 
@@ -196,6 +238,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     setSelectedFolderId(folderId);
   };
 
+  const handleSignIn = () => {
+    console.log('🔐 Sidebar: handleSignIn called');
+    signInWithGoogle();
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      alert('Failed to sign out. Please try again.');
+    }
+  };
+
   const handleFolderExpand = (folderId: string) => {
     const newExpanded = new Set(expandedFolders);
     if (newExpanded.has(folderId)) {
@@ -245,7 +301,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       console.log(`Found ${imageFiles.length} image files`);
       console.log('Image files:', imageFiles.map(f => f.name));
 
-      // Use the new method that handles images
       const parsedData = await KMLParser.parseKMLWithImages(kmlFile, imageFiles.length > 0 ? imageFiles as any : undefined);
       
       console.log('Parsed data:', {
@@ -265,25 +320,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       
       // Add folders to database
       for (const folder of parsedData.folders) {
-        addFolder(folder);
+        // Add userId to imported folders
+        const folderWithUser = { ...folder, userId: user?.uid || undefined };
+        addFolder(folderWithUser);
       }
       
       // Add markers to database
       for (const marker of parsedData.markers) {
+        // Add userId to imported markers
+        const markerWithUser = { ...marker, userId: user?.uid || undefined };
         // Add marker to store
-        useMapStore.getState().addMarker(marker);
+        useMapStore.getState().addMarker(markerWithUser);
       }
 
       setImportProgress(100);
       setTimeout(() => {
         setIsImporting(false);
         setImportProgress(0);
-        alert(`Import successful! Added ${parsedData.folders.length} folders and ${parsedData.markers.length} markers with ${imageFiles.length} images.`);
+        alert(`Import successful! Added ${parsedData.folders.length} folders and ${parsedData.markers.length} markers. Images were skipped to prevent memory issues.`);
       }, 500);
 
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Failed to import KML file. Please check the file format.');
+      
+      // Check if it's a memory error
+      if (error instanceof Error && error.message.includes('memory')) {
+        alert('Import failed due to insufficient memory. Try importing with fewer images or restart your browser.');
+      } else {
+        alert('Failed to import KML file. Please check the file format and try again.');
+      }
+      
       setIsImporting(false);
       setImportProgress(0);
     }
@@ -404,63 +470,68 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <h2 className="text-lg font-semibold">MarkerMap</h2>
-            <button
-              onClick={onClose}
-              className="lg:hidden p-2 hover:bg-gray-700 rounded-lg"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                onClick={onClose}
+                className="lg:hidden p-2 hover:bg-gray-700 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
-          {/* Import Section */}
+          {/* Authentication Section */}
           <div className="p-4 border-b border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-2">Import Data</h3>
-            <p className="text-sm text-gray-400 mb-4">
-              Select your entire export folder (e.g., export_2025_10_22-17_20_50). 
-              The app will automatically find the KML file and all images inside.
-            </p>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg transition-colors"
-            >
-              <Upload size={16} />
-              {isImporting ? 'Importing...' : 'Import Export Folder'}
-            </button>
-            
-            {isImporting && (
-              <div className="mt-2">
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${importProgress}%` }}
-                  />
+            {loading ? (
+              <div className="flex items-center gap-2 text-gray-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                <span className="text-sm">Loading...</span>
+              </div>
+            ) : user ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-white">
+                    {user.displayName || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {user.email}
+                  </p>
+                  <p className="text-xs text-green-400">✓ Signed in</p>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">{importProgress}%</p>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 bg-gray-800 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
+                >
+                  <LogOut size={12} />
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-400">
+                  Sign in to sync your data across devices
+                </p>
+                <button
+                  onClick={handleSignIn}
+                  className="w-full flex items-center gap-2 p-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
+                >
+                  <LogIn size={16} />
+                  Sign in with Google
+                </button>
+                <p className="text-xs text-gray-500">
+                  You will be redirected to Google for sign-in
+                </p>
               </div>
             )}
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              {...({ webkitdirectory: "true", directory: "true" } as any)}
-              accept=".kml,.jpg,.jpeg"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
           </div>
 
-          {/* Clear All Data Section */}
-          <div className="p-4 border-b border-gray-700">
-            <button
-              onClick={handleClearAllData}
-              className="w-full flex items-center gap-2 p-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-            >
-              <Trash2 size={16} />
-              Clear All Data
-            </button>
-          </div>
 
           {/* Folders Section */}
           <div className="flex-1 overflow-y-auto p-4">
@@ -565,6 +636,76 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <Save size={16} />
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-96 max-w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Settings</h3>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Import Section */}
+              <div>
+                <h4 className="text-md font-medium text-white mb-2">Import Data</h4>
+                <p className="text-sm text-gray-400 mb-4">
+                  Select your entire export folder (e.g., export_2025_10_22-17_20_50). 
+                  The app will automatically find the KML file and all images inside.
+                </p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg transition-colors"
+                >
+                  <Upload size={16} />
+                  {isImporting ? 'Importing...' : 'Import Export Folder'}
+                </button>
+                
+                {isImporting && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${importProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{importProgress}%</p>
+                  </div>
+                )}
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  {...({ webkitdirectory: "true", directory: "true" } as any)}
+                  accept=".kml,.jpg,.jpeg"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Clear All Data Section */}
+              <div>
+                <h4 className="text-md font-medium text-white mb-2">Danger Zone</h4>
+                <button
+                  onClick={handleClearAllData}
+                  className="w-full flex items-center gap-2 p-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  <Trash2 size={16} />
+                  Clear All Data
+                </button>
+              </div>
             </div>
           </div>
         </div>

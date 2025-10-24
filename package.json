@@ -9,8 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
     "@types/mapbox-gl": "^3.4.1",
     "@types/xml2js": "^0.4.14",
+    "cloudinary": "^2.8.0",
     "clsx": "^2.1.1",
     "dexie": "^4.2.1",
     "lucide-react": "^0.546.0",

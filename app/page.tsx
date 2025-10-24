@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useMapStore } from '../store/mapStore';
-import { db, Marker, Folder } from '../lib/db';
+import { db, Marker, Folder, getUserFolders, getUserMarkers } from '../lib/db';
+import { useAuthContext } from '../components/AuthProvider';
 import Sidebar from '../components/Sidebar';
 import MarkerEditModal from '../components/MarkerEditModal';
 import { Menu, MapPin, Edit, Trash2 } from 'lucide-react';
@@ -22,6 +23,13 @@ const MapboxMap = dynamic(() => import('../components/MapboxMap'), {
 });
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuthContext();
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -36,76 +44,143 @@ export default function Home() {
     setSelectedMarker,
     selectedFolderId,
     setSelectedFolderId,
+    user: storeUser,
+    setUser,
+    syncToCloud,
+    loadFromCloud,
   } = useMapStore();
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Load data from IndexedDB on mount
+
+  // Sync user state from auth context to store
   useEffect(() => {
+    setUser(user);
+  }, [user, setUser]);
+
+  // Load data based on authentication state
+  useEffect(() => {
+    console.log('🔍 DATA LOAD - Starting... User:', user ? user.uid : 'null', 'AuthLoading:', authLoading);
+    
+    // Don't load data until authentication is finished
+    if (authLoading) {
+      return;
+    }
+    
+    // Don't load data until user state is synced to store
+    if (user && !storeUser) {
+      return;
+    }
+    
     const loadData = async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       try {
-        const [loadedFolders, loadedMarkers] = await Promise.all([
-          db.folders.toArray(),
-          db.markers.toArray(),
-        ]);
+        const currentUser = storeUser || user;
+        console.log('🔍 DATA LOAD - User:', currentUser ? currentUser.uid : 'null');
         
-        // Create default folder if none exist
-        if (loadedFolders.length === 0) {
-          const defaultFolder: Folder = {
-            id: 'default-folder',
-            name: 'Default',
-            color: '#ffffff',
-            icon: 'folder',
-            visible: true,
-            order: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          await db.folders.add(defaultFolder);
-          loadedFolders.push(defaultFolder);
-        }
-        
-        setFolders(loadedFolders);
-        setMarkers(loadedMarkers);
-        
-        // Set default folder as selected if none is selected
-        if (!selectedFolderId && loadedFolders.length > 0) {
-          setSelectedFolderId(loadedFolders[0].id);
-        }
-        
-        setIsLoaded(true);
-      } catch (error) {
-        console.error('Failed to load data:', error);
-        setIsLoaded(true);
-      }
-    };
-
-    loadData();
-  }, [setFolders, setMarkers]);
-
-  // Save data to IndexedDB when state changes
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    const saveData = async () => {
-      try {
-        await db.transaction('rw', [db.folders, db.markers], async () => {
-          // Clear existing data
-          await db.folders.clear();
-          await db.markers.clear();
+        if (currentUser) {
+          // User signed in - load from Supabase
+          try {
+            await loadFromCloud();
+            console.log('🔍 DATA LOAD - Cloud load successful');
+          } catch (supabaseError) {
+            console.log('🔍 DATA LOAD - Cloud failed, using local fallback');
+            const [loadedFolders, loadedMarkers] = await Promise.all([
+              getUserFolders(currentUser.uid),
+              getUserMarkers(currentUser.uid),
+            ]);
+            setFolders(loadedFolders);
+            setMarkers(loadedMarkers);
+          }
+        } else {
+          // User signed out - load local data
+          const [loadedFolders, loadedMarkers] = await Promise.all([
+            getUserFolders(null),
+            getUserMarkers(null),
+          ]);
           
-          // Save new data
-          await db.folders.bulkAdd(folders);
-          await db.markers.bulkAdd(markers);
-        });
+          if (loadedFolders.length === 0) {
+            const defaultFolder: Folder = {
+              id: 'default-folder-local',
+              name: 'Default',
+              color: '#ffffff',
+              icon: 'folder',
+              visible: true,
+              order: 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              userId: undefined,
+            };
+            
+            const existingDefault = await db.folders.where('id').equals('default-folder-local').first();
+            if (!existingDefault) {
+              await db.folders.add(defaultFolder);
+            }
+            loadedFolders.push(defaultFolder);
+          }
+          
+          setFolders(loadedFolders);
+          setMarkers(loadedMarkers);
+        }
+        
+        // Folder selection will be handled by the store's useEffect
+        
+        console.log('🔍 DATA LOAD - Complete, setting isLoaded');
+        setIsLoaded(true);
       } catch (error) {
-        console.error('Failed to save data:', error);
+        console.log('🔍 DATA LOAD - Error, using fallback');
+        const defaultFolder: Folder = {
+          id: 'default-folder',
+          name: 'Default',
+          color: '#ffffff',
+          icon: 'folder',
+          visible: true,
+          order: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        setFolders([defaultFolder]);
+        setMarkers([]);
+        setSelectedFolderId(defaultFolder.id);
+        setIsLoaded(true);
       }
+      
+      // GUARANTEED: Always set isLoaded to true
+      setIsLoaded(true);
     };
 
-    saveData();
-  }, [folders, markers, isLoaded]);
+    // Add a maximum timeout to ensure the app loads no matter what
+    const maxTimeout = setTimeout(() => {
+      if (!isLoaded) {
+        const defaultFolder: Folder = {
+          id: 'default-folder',
+          name: 'Default',
+          color: '#ffffff',
+          icon: 'folder',
+          visible: true,
+          order: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        setFolders([defaultFolder]);
+        setMarkers([]);
+        setSelectedFolderId(defaultFolder.id);
+        setIsLoaded(true);
+        console.log('🔍 DATA LOAD - TIMEOUT FORCE: App loaded with fallback');
+      }
+    }, 3000);
+
+        loadData().finally(() => {
+          clearTimeout(maxTimeout);
+        });
+      }, [user, authLoading, storeUser]);
+
+  // Note: Data saving is now handled by individual store functions (addMarker, updateMarker, etc.)
+  // which save with the correct userId context. No bulk save needed.
 
   const handleAddMarker = async (lngLat: { lng: number; lat: number }) => {
     const targetFolderId = selectedFolderId || folders[0]?.id || '';
@@ -122,6 +197,7 @@ export default function Home() {
       customFields: {},
       createdAt: new Date(),
       updatedAt: new Date(),
+      userId: user?.uid || undefined,
     };
 
     addMarker(newMarker);
@@ -132,6 +208,7 @@ export default function Home() {
     updateMarker(updatedMarker.id, updatedMarker);
     setSelectedMarker(updatedMarker);
   };
+
 
   const handleDeleteMarker = () => {
     if (selectedMarker) {
@@ -151,10 +228,24 @@ export default function Home() {
     );
   }
 
+  // Don't render until we're on the client side to prevent hydration mismatch
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex bg-gray-900 overflow-hidden">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      
+
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
@@ -212,7 +303,7 @@ export default function Home() {
               <p>Folder: {folders.find(f => f.id === selectedMarker.folderId)?.name || 'Unknown'}</p>
               <p>Lat: {selectedMarker.latitude.toFixed(6)}</p>
               <p>Lng: {selectedMarker.longitude.toFixed(6)}</p>
-              <p>Created: {selectedMarker.createdAt.toLocaleDateString()}</p>
+              <p>Created: {new Date(selectedMarker.createdAt).toLocaleDateString()}</p>
               {selectedMarker.customFields && Object.keys(selectedMarker.customFields).length > 0 && (
                 <p className="mt-2 text-blue-300">+ {Object.keys(selectedMarker.customFields).length} custom fields</p>
               )}

@@ -201,7 +201,10 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
 
   // Update markers on the map
   const updateMarkers = useCallback(() => {
+    console.log('🗺️ MAP - updateMarkers called, markers:', markers.length, 'mapLoaded:', mapLoaded);
+    
     if (!mapRef.current || !mapLoaded) {
+      console.log('🗺️ MAP - Map not ready, skipping');
       return;
     }
 
@@ -218,11 +221,14 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
       return folder.visible !== false;
     });
 
-    // Add new markers with stable positioning
-    visibleMarkers.forEach(marker => {
+    console.log('🗺️ MAP - Adding', visibleMarkers.length, 'visible markers');
+    console.log('🗺️ MAP - First marker coords:', visibleMarkers[0] ? `${visibleMarkers[0].longitude}, ${visibleMarkers[0].latitude}` : 'none');
+
+    // Add new markers
+    visibleMarkers.forEach((marker, index) => {
       const el = createMarkerElement(marker);
+      console.log('🗺️ MAP - Creating marker element for:', marker.id, 'Element:', el);
       
-      // Create marker with stable positioning
       const mapboxMarker = new mapboxgl.Marker({
         element: el,
         anchor: 'bottom'
@@ -230,9 +236,11 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
         .setLngLat([marker.longitude, marker.latitude])
         .addTo(map);
       
-      // Store marker reference
+      console.log('🗺️ MAP - Mapbox marker created:', mapboxMarker);
       markersRef.current.push(mapboxMarker);
     });
+
+    console.log('🗺️ MAP - Total markers on map:', markersRef.current.length);
 
   }, [markers, folders, mapLoaded, createMarkerElement]);
 

@@ -427,38 +427,23 @@ export class KMLParser {
 
   static async parseKMLWithImages(kmlFile: File, localMediaFolder?: FileList): Promise<ParsedKML> {
     const kmlResult = await this.parseKML(await kmlFile.text());
+    
+    // Skip image processing for now to prevent memory issues
+    // Images will be stored as empty arrays
     const imageFiles: { [filename: string]: string } = {};
     
-    // Convert image files to base64 if localMediaFolder is provided
-    if (localMediaFolder) {
-      for (let i = 0; i < localMediaFolder.length; i++) {
-        const file = localMediaFolder[i];
-        if (file.type.startsWith('image/')) {
-          const base64 = await this.fileToBase64(file);
-          imageFiles[file.name] = base64;
-        }
-      }
-    }
-    
-    // Update markers with actual base64 image data
+    // Update markers with empty image arrays (images skipped)
     const updatedMarkers = kmlResult.markers.map(marker => {
-      if (marker.images && marker.images.length > 0) {
-        const base64Images = marker.images
-          .map(filename => imageFiles[filename])
-          .filter(base64 => base64); // Only include images that were found
-        
-        return {
-          ...marker,
-          images: base64Images
-        };
-      }
-      return marker;
+      return {
+        ...marker,
+        images: [] // Skip images for now
+      };
     });
     
     return {
       ...kmlResult,
       markers: updatedMarkers,
-      imageFiles
+      imageFiles: {} // No images processed
     };
   }
 

@@ -1,7 +1,18 @@
 import { create } from 'zustand';
-import { Marker, Folder } from '../lib/db';
+import { Marker, Folder, addUserMarker, updateUserMarker, deleteUserMarker, addUserFolder, updateUserFolder, deleteUserFolder, syncFoldersToSupabase, syncMarkersToSupabase, loadFoldersFromSupabase, loadMarkersFromSupabase, getUserFolders, getUserMarkers, deleteFolderFromSupabase } from '../lib/db';
+
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
 
 interface MapState {
+  // Authentication state
+  user: AuthUser | null;
+  setUser: (user: AuthUser | null) => void;
+  
   // Map state
   viewState: {
     longitude: number;
@@ -43,9 +54,17 @@ interface MapState {
   setIsImporting: (importing: boolean) => void;
   importProgress: number;
   setImportProgress: (progress: number) => void;
+  
+  // Supabase sync functions
+  syncToCloud: () => Promise<void>;
+  loadFromCloud: () => Promise<void>;
 }
 
 export const useMapStore = create<MapState>((set, get) => ({
+  // Authentication state
+  user: null,
+  setUser: (user) => set({ user }),
+  
   // Initial map state (will be updated to user's location on load)
   viewState: {
     longitude: -98.5795,
@@ -59,33 +78,175 @@ export const useMapStore = create<MapState>((set, get) => ({
   // Marker state
   markers: [],
   setMarkers: (markers) => set({ markers }),
-  addMarker: (marker) => set((state) => ({
-    markers: [...state.markers, marker]
-  })),
-  updateMarker: (id, updates) => set((state) => ({
-    markers: state.markers.map(marker => 
-      marker.id === id ? { ...marker, ...updates } : marker
-    )
-  })),
-  deleteMarker: (id) => set((state) => ({
-    markers: state.markers.filter(marker => marker.id !== id)
-  })),
+  addMarker: async (marker) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    
+    // Add to store first
+    set((state) => ({
+      markers: [...state.markers, marker]
+    }));
+    
+    if (userId) {
+      // Signed in: Save to IndexedDB and sync to Supabase (background)
+      await addUserMarker(marker, userId);
+      try {
+        const currentState = get();
+        syncMarkersToSupabase(userId, currentState.markers).catch(error => {
+          console.error('Background sync failed:', error);
+        });
+      } catch (error) {
+        console.error('Failed to sync marker to cloud:', error);
+      }
+    } else {
+      // Signed out: Only save to IndexedDB
+      await addUserMarker(marker, null);
+    }
+  },
+  updateMarker: async (id, updates) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    
+    set((state) => ({
+      markers: state.markers.map(marker => 
+        marker.id === id ? { ...marker, ...updates } : marker
+      )
+    }));
+    
+    if (userId) {
+      // Signed in: Only sync to Supabase
+      try {
+        const currentState = get();
+        await syncMarkersToSupabase(userId, currentState.markers);
+      } catch (error) {
+        console.error('Failed to sync updated marker to cloud:', error);
+      }
+    } else {
+      // Signed out: Only update IndexedDB
+      const updatedMarker = state.markers.find(marker => marker.id === id);
+      if (updatedMarker) {
+        const newMarker = { ...updatedMarker, ...updates };
+        await updateUserMarker(newMarker, null);
+      }
+    }
+  },
+  deleteMarker: async (id) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    
+    set((state) => ({
+      markers: state.markers.filter(marker => marker.id !== id)
+    }));
+    
+    if (userId) {
+      // Signed in: Only sync to Supabase
+      try {
+        const currentState = get();
+        await syncMarkersToSupabase(userId, currentState.markers);
+      } catch (error) {
+        console.error('Failed to sync marker deletion to cloud:', error);
+      }
+    } else {
+      // Signed out: Only delete from IndexedDB
+      await deleteUserMarker(id, null);
+    }
+  },
   
   // Folder state
   folders: [],
-  setFolders: (folders) => set({ folders }),
-  addFolder: (folder) => set((state) => ({
-    folders: [...state.folders, folder]
-  })),
-  updateFolder: (id, updates) => set((state) => ({
-    folders: state.folders.map(folder => 
-      folder.id === id ? { ...folder, ...updates } : folder
-    )
-  })),
-  deleteFolder: (id) => set((state) => ({
-    folders: state.folders.filter(folder => folder.id !== id),
-    markers: state.markers.filter(marker => marker.folderId !== id)
-  })),
+  setFolders: (folders) => {
+    set({ folders });
+    // Auto-select first folder if none selected
+    const state = get();
+    if (!state.selectedFolderId && folders.length > 0) {
+      set({ selectedFolderId: folders[0].id });
+    }
+  },
+  addFolder: async (folder) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    
+    // Add to store first
+    set((state) => ({
+      folders: [...state.folders, folder]
+    }));
+    
+    // Save to IndexedDB
+    await addUserFolder(folder, userId);
+    
+    // Sync to Supabase only if user is logged in (but don't await it to prevent blocking)
+    if (userId) {
+      try {
+        const currentState = get();
+        syncFoldersToSupabase(userId, currentState.folders).catch(error => {
+          console.error('Background sync failed:', error);
+        });
+      } catch (error) {
+        console.error('Failed to sync folder to cloud:', error);
+      }
+    }
+  },
+  updateFolder: async (id, updates) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    const updatedFolder = state.folders.find(folder => folder.id === id);
+    if (updatedFolder) {
+      const newFolder = { ...updatedFolder, ...updates };
+      await updateUserFolder(newFolder, userId);
+    }
+    set((state) => ({
+      folders: state.folders.map(folder => 
+        folder.id === id ? { ...folder, ...updates } : folder
+      )
+    }));
+    
+    // Sync to Supabase only if user is logged in (but don't await it to prevent blocking)
+    if (userId) {
+      try {
+        const currentState = get();
+        syncFoldersToSupabase(userId, currentState.folders).catch(error => {
+          console.error('Background sync failed:', error);
+        });
+      } catch (error) {
+        console.error('Failed to sync folder update to cloud:', error);
+      }
+    }
+  },
+  deleteFolder: async (id) => {
+    const state = get();
+    const userId = state.user?.uid || null;
+    
+    // Delete from IndexedDB first
+    await deleteUserFolder(id, userId);
+    
+    // Also delete markers in this folder from IndexedDB
+    const markersToDelete = state.markers.filter(marker => marker.folderId === id);
+    for (const marker of markersToDelete) {
+      await deleteUserMarker(marker.id, userId);
+    }
+    
+    // Update store state
+    set((state) => ({
+      folders: state.folders.filter(folder => folder.id !== id),
+      markers: state.markers.filter(marker => marker.folderId !== id)
+    }));
+    
+    // Delete from Supabase if user is logged in
+    if (userId) {
+      try {
+        // Delete individual folder from Supabase
+        await deleteFolderFromSupabase(id, userId);
+        
+        // Also sync remaining markers to Supabase (to remove deleted markers)
+        const currentState = get();
+        syncMarkersToSupabase(userId, currentState.markers).catch(error => {
+          console.error('Background marker sync failed:', error);
+        });
+      } catch (error) {
+        console.error('Failed to delete folder from cloud:', error);
+      }
+    }
+  },
   
   // UI state
   selectedMarker: null,
@@ -106,4 +267,55 @@ export const useMapStore = create<MapState>((set, get) => ({
   setIsImporting: (isImporting) => set({ isImporting }),
   importProgress: 0,
   setImportProgress: (importProgress) => set({ importProgress }),
+  
+  // Supabase sync functions
+  syncToCloud: async () => {
+    const state = get();
+    if (!state.user?.uid) {
+      return;
+    }
+    
+    try {
+      await Promise.all([
+        syncFoldersToSupabase(state.user.uid, state.folders),
+        syncMarkersToSupabase(state.user.uid, state.markers),
+      ]);
+    } catch (error) {
+      console.error('Cloud sync failed:', error);
+      throw error;
+    }
+  },
+  
+  loadFromCloud: async () => {
+    const state = get();
+    if (!state.user?.uid) {
+      return;
+    }
+    
+    try {
+      console.log('🔍 CLOUD LOAD - Starting for user:', state.user.uid);
+      const [cloudFolders, cloudMarkers] = await Promise.all([
+        loadFoldersFromSupabase(state.user.uid),
+        loadMarkersFromSupabase(state.user.uid),
+      ]);
+      
+      console.log('🔍 CLOUD LOAD - Received:', cloudFolders.length, 'folders,', cloudMarkers.length, 'markers');
+      
+  // SIMPLE LOGIC: Just use cloud data directly
+  set({ folders: cloudFolders, markers: cloudMarkers });
+  console.log('🔍 CLOUD LOAD - Cloud data set in store');
+  
+  // Auto-select first folder if none selected
+  const newState = get();
+  if (!newState.selectedFolderId && cloudFolders.length > 0) {
+    set({ selectedFolderId: cloudFolders[0].id });
+    console.log('🔍 CLOUD LOAD - Auto-selected first folder:', cloudFolders[0].id);
+  }
+  
+  console.log('🔍 CLOUD LOAD - Store after set:', newState.folders.length, 'folders,', newState.markers.length, 'markers');
+    } catch (error) {
+      console.error('🔍 CLOUD LOAD - Failed:', error);
+      throw error;
+    }
+  },
 }));

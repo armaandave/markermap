@@ -1,0 +1,76 @@
+import { useState, useEffect } from 'react';
+import { getGoogleAuthUrl } from '../lib/google-auth';
+
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+export const useAuth = () => {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  console.log('🔐 useAuth: Hook initialized. Loading state:', loading);
+
+  // Check for existing auth on mount
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        console.log('🔐 useAuth: useEffect triggered - checking auth state');
+        console.log('🔐 useAuth: Checking sessionStorage for authUser...');
+        const storedUser = sessionStorage.getItem('authUser');
+        console.log('🔐 useAuth: Raw storedUser:', storedUser);
+        
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          console.log('🔐 useAuth: Parsed user data:', userData);
+          console.log('🔐 useAuth: Found stored user:', userData.email, 'UID:', userData.uid);
+          setUser(userData);
+        } else {
+          console.log('🔐 useAuth: No stored user found in sessionStorage');
+        }
+      } catch (error) {
+        console.error('🔐 useAuth: Error checking stored auth:', error);
+        sessionStorage.removeItem('authUser');
+      } finally {
+        console.log('🔐 useAuth: Setting loading to false');
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  const signInWithGoogle = () => {
+    console.log('🔐 useAuth: Starting Google sign-in...');
+    const authUrl = getGoogleAuthUrl();
+    console.log('🔐 useAuth: Redirecting to:', authUrl);
+    window.location.href = authUrl;
+  };
+
+  const logout = () => {
+    console.log('🔐 useAuth: Logging out...');
+    sessionStorage.removeItem('authUser');
+    setUser(null);
+  };
+
+  const setAuthUser = (userData: AuthUser) => {
+    console.log('🔐 useAuth: Setting auth user:', userData.email);
+    sessionStorage.setItem('authUser', JSON.stringify(userData));
+    setUser(userData);
+  };
+
+  console.log('🔐 useAuth: Returning state - User:', user ? user.email : 'null', 'Loading:', loading);
+
+  return {
+    user,
+    loading,
+    signInWithGoogle,
+    logout,
+    setAuthUser,
+    setUser, // Expose setUser for the callback handler
+    setLoading, // Expose setLoading for the callback handler
+  };
+};
