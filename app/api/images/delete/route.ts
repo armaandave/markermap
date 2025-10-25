@@ -27,7 +27,7 @@ export async function DELETE(request: NextRequest) {
         // Extract public ID from Cloudinary URL
         // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/public_id.jpg
         const urlParts = imageUrl.split('/');
-        const uploadIndex = urlParts.findIndex(part => part === 'upload');
+        const uploadIndex = urlParts.findIndex((part: string) => part === 'upload');
         
         if (uploadIndex === -1 || uploadIndex + 1 >= urlParts.length) {
           console.warn(`⚠️ Invalid Cloudinary URL format: ${imageUrl}`);
