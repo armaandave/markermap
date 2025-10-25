@@ -61,22 +61,15 @@ export default function Home() {
 
   // Load data based on authentication state
   useEffect(() => {
-    console.log('🔍 PAGE LOAD DEBUG:');
-    console.log('- User from context:', user);
-    console.log('- Auth loading:', authLoading);
-    console.log('- Store user:', storeUser);
-    console.log('- SessionStorage:', sessionStorage.getItem('authUser'));
-    console.log('- Is loaded:', isLoaded);
+    console.log('🔍 DATA LOAD - Starting... User:', user ? user.uid : 'null', 'AuthLoading:', authLoading);
     
     // Don't load data until authentication is finished
     if (authLoading) {
-      console.log('🔍 DATA LOAD - Waiting for auth to finish...');
       return;
     }
     
     // Don't load data until user state is synced to store
     if (user && !storeUser) {
-      console.log('🔍 DATA LOAD - Waiting for user state to sync to store...');
       return;
     }
     

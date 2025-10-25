@@ -12,17 +12,14 @@ export async function POST(request: Request) {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = getGoogleRedirectUri();
 
-  console.log('🔐 API TOKEN DEBUG:');
-  console.log('- Code:', code);
-  console.log('- Client ID:', clientId);
-  console.log('- Client Secret present:', !!clientSecret);
-  console.log('- Redirect URI:', redirectUri);
-  console.log('- VERCEL_URL:', process.env.VERCEL_URL);
-
   if (!clientId || !clientSecret || !redirectUri) {
     console.error('🚨 Server-side: Missing Google OAuth environment variables!');
     return NextResponse.json({ error: 'Server configuration error: Missing OAuth credentials' }, { status: 500 });
   }
+
+  console.log('🔐 Server-side Token exchange - Client ID:', clientId);
+  console.log('🔐 Server-side Token exchange - Client Secret present:', !!clientSecret);
+  console.log('🔐 Server-side Token exchange - Code:', code);
 
   const url = 'https://oauth2.googleapis.com/token';
   const values = {
@@ -43,9 +40,6 @@ export async function POST(request: Request) {
     });
 
     const data = await response.json();
-    console.log('🔐 Google API Response:');
-    console.log('- Status:', response.status);
-    console.log('- Data:', data);
 
     if (!response.ok) {
       console.error('🚨 Server-side: Failed to get Google access token:', data);

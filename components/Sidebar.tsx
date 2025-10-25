@@ -239,11 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const handleSignIn = () => {
-    console.log('🔐 SIDEBAR SIGN-IN DEBUG:');
-    console.log('- User context:', user);
-    console.log('- Loading state:', loading);
-    console.log('- SessionStorage before:', sessionStorage.getItem('authUser'));
-    console.log('- Calling signInWithGoogle...');
+    console.log('🔐 Sidebar: handleSignIn called');
     signInWithGoogle();
   };
 
