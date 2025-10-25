@@ -1,6 +1,6 @@
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
-// Get redirect URI - always auto-detect, ignore environment variable for production
+// Get redirect URI - ALWAYS auto-detect, ignore environment variable completely
 export const getGoogleRedirectUri = () => {
   // Auto-detect based on environment
   if (typeof window !== 'undefined') {

@@ -8,7 +8,7 @@ import { getGoogleUserInfo } from '../../../lib/google-auth';
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, setLoading } = useAuthContext();
+  const { user, setUser, setLoading } = useAuthContext();
 
   useEffect(() => {
     const handleAuthCallback = async () => {
