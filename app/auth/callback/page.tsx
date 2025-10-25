@@ -16,6 +16,13 @@ function AuthCallbackContent() {
       const code = searchParams.get('code');
       const error = searchParams.get('error');
 
+      console.log('🔍 AUTH CALLBACK DEBUG:');
+      console.log('- Code:', code);
+      console.log('- Error:', error);
+      console.log('- Current URL:', window.location.href);
+      console.log('- SessionStorage before:', sessionStorage.getItem('authUser'));
+      console.log('- User context before:', user);
+
       if (error) {
         console.error('🚨 Google OAuth Error:', error);
         router.push('/'); // Redirect to home on error
@@ -36,6 +43,8 @@ function AuthCallbackContent() {
           });
 
           const tokenData = await tokenResponse.json();
+          console.log('🔍 Token response status:', tokenResponse.status);
+          console.log('🔍 Token response data:', tokenData);
 
           if (!tokenResponse.ok) {
             console.error('🚨 Auth Callback: API token exchange failed:', tokenData);
@@ -54,8 +63,10 @@ function AuthCallbackContent() {
             photoURL: userInfo.picture,
           };
 
+          console.log('🔍 Setting user:', authUser);
           setUser(authUser);
           sessionStorage.setItem('authUser', JSON.stringify(authUser)); // Persist user
+          console.log('🔍 SessionStorage after:', sessionStorage.getItem('authUser'));
           console.log('🔄 Auth Callback: User signed in and stored in session.');
           router.push('/'); // Redirect to main app
         } catch (err) {
