@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getGoogleRedirectUri } from '../../../../lib/google-auth';
 
 export async function POST(request: Request) {
-  const { code } = await request.json();
+  const { code, redirectOrigin } = await request.json();
 
   if (!code) {
     return NextResponse.json({ error: 'Authorization code is missing' }, { status: 400 });
@@ -10,7 +10,8 @@ export async function POST(request: Request) {
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = getGoogleRedirectUri();
+  const requestOrigin = redirectOrigin || request.headers.get('origin') || undefined;
+  const redirectUri = getGoogleRedirectUri({ baseUrl: requestOrigin });
 
   if (!clientId || !clientSecret || !redirectUri) {
     console.error('🚨 Server-side: Missing Google OAuth environment variables!');
@@ -53,5 +54,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal server error during token exchange' }, { status: 500 });
   }
 }
-
 

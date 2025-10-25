@@ -32,7 +32,7 @@ function AuthCallbackContent() {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ code, redirectOrigin: window.location.origin }),
           });
 
           const tokenData = await tokenResponse.json();

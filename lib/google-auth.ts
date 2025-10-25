@@ -1,7 +1,11 @@
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 // Get redirect URI - always auto-detect, ignore environment variable for production
-export const getGoogleRedirectUri = () => {
+interface RedirectOptions {
+  baseUrl?: string;
+}
+
+export const getGoogleRedirectUri = (options: RedirectOptions = {}) => {
   // Auto-detect based on environment
   if (typeof window !== 'undefined') {
     // Client-side: use current domain
@@ -43,7 +47,8 @@ export const getGoogleRedirectUri = () => {
       return 'http://localhost:3000';
     };
 
-    const baseUrl = determineBaseUrl();
+    const baseUrlOverride = options.baseUrl ? normalizeBaseUrl(options.baseUrl) : undefined;
+    const baseUrl = baseUrlOverride ?? determineBaseUrl();
 
     const uri = `${baseUrl}/auth/callback`;
 
