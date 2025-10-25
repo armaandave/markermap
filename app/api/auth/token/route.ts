@@ -10,7 +10,8 @@ export async function POST(request: Request) {
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = getGoogleRedirectUri();
+  // Always use main production URL for token exchange to match OAuth request
+  const redirectUri = 'https://markermap-nine.vercel.app/auth/callback';
 
   console.log('🔐 API TOKEN DEBUG:');
   console.log('- Code:', code);
