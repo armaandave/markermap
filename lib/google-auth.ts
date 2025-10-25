@@ -1,8 +1,27 @@
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-export const GOOGLE_REDIRECT_URI = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI;
 
-if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
-  console.error('🚨 Google OAuth environment variables (client ID or redirect URI) are not set!');
+// Get redirect URI - use environment variable if set, otherwise auto-detect
+export const getGoogleRedirectUri = () => {
+  if (process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI) {
+    return process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI;
+  }
+  
+  // Auto-detect based on environment
+  if (typeof window !== 'undefined') {
+    // Client-side: use current domain
+    return `${window.location.origin}/auth/callback`;
+  } else {
+    // Server-side: use Vercel URL or fallback to localhost
+    return process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}/auth/callback`
+      : 'http://localhost:3000/auth/callback';
+  }
+};
+
+export const GOOGLE_REDIRECT_URI = getGoogleRedirectUri();
+
+if (!GOOGLE_CLIENT_ID) {
+  console.error('🚨 Google OAuth environment variables (client ID) are not set!');
 }
 
 export const getGoogleAuthUrl = () => {

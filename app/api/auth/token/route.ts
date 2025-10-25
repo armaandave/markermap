@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getGoogleRedirectUri } from '../../../lib/google-auth';
 
 export async function POST(request: Request) {
   const { code } = await request.json();
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI;
+  const redirectUri = getGoogleRedirectUri();
 
   if (!clientId || !clientSecret || !redirectUri) {
     console.error('🚨 Server-side: Missing Google OAuth environment variables!');
