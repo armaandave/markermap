@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Marker, Folder } from '../lib/db';
-import { X, Save, Plus, Trash2, Upload } from 'lucide-react';
+import { X, Save, Plus, Trash2 } from 'lucide-react';
+import ImageUpload from './ImageUpload';
+import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
 
 interface MarkerEditModalProps {
   marker: Marker | null;
@@ -29,7 +31,6 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
   });
 
   const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (marker) {
@@ -83,29 +84,30 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
     }));
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = e.target?.result as string;
-          setFormData(prev => ({
-            ...prev,
-            images: [...(prev.images || []), base64],
-          }));
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-  };
-
-  const handleImageRemove = (index: number) => {
+  const handleImageUploaded = (imageUrl: string) => {
     setFormData(prev => ({
       ...prev,
-      images: prev.images?.filter((_, i) => i !== index) || [],
+      images: [...(prev.images || []), imageUrl],
+    }));
+  };
+
+  const handleImageRemoved = async (imageUrl: string) => {
+    // Delete from Cloudinary first
+    console.log(`🗑️ Deleting image from Cloudinary: ${imageUrl}`);
+    
+    const deletionResult = await deleteCloudinaryImages([imageUrl]);
+    
+    if (deletionResult.success) {
+      console.log(`✅ Successfully deleted image from Cloudinary`);
+    } else {
+      console.error(`❌ Failed to delete image from Cloudinary:`, deletionResult.errorDetails);
+      // Still proceed with removing from UI even if Cloudinary deletion fails
+    }
+
+    // Remove from local state
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images?.filter(url => url !== imageUrl) || [],
     }));
   };
 
@@ -169,44 +171,12 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Images
             </label>
-            <div className="space-y-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full p-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-500 transition-colors flex items-center justify-center gap-2"
-              >
-                <Upload size={20} />
-                Upload Images
-              </button>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              
-              {formData.images && formData.images.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {formData.images.map((image, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={image}
-                        alt={`Marker image ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <button
-                        onClick={() => handleImageRemove(index)}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ImageUpload
+              onImageUploaded={handleImageUploaded}
+              onImageRemoved={handleImageRemoved}
+              existingImages={formData.images || []}
+              maxImages={5}
+            />
           </div>
 
           <div>

@@ -18,25 +18,45 @@ export async function POST(request: Request) {
 
     console.log('🔄 Supabase Sync: Syncing', markers.length, 'markers for user:', userId);
 
-    // Convert markers to Supabase format
-    const supabaseMarkers = markers.map((marker: any) => ({
-      ...convertMarkerToSupabase(marker),
-      created_at: new Date(marker.createdAt).toISOString(),
-      updated_at: new Date(marker.updatedAt).toISOString(),
-    }));
-
-    // Upsert markers (insert or update)
-    const { data, error } = await supabase
+    // First, delete all existing markers for this user
+    console.log('🔄 Supabase Sync: Deleting existing markers for user:', userId);
+    const { error: deleteError } = await supabase
       .from('markers')
-      .upsert(supabaseMarkers, { onConflict: 'id' });
+      .delete()
+      .eq('user_id', userId);
 
-    if (error) {
-      console.error('🚨 Supabase Sync: Error syncing markers:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (deleteError) {
+      console.error('🚨 Supabase Sync: Error deleting existing markers:', deleteError);
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
     }
 
-    console.log('✅ Supabase Sync: Successfully synced markers');
-    return NextResponse.json({ success: true, data });
+    // Then insert the new markers (if any)
+    if (markers.length > 0) {
+      console.log('🔄 Supabase Sync: Inserting', markers.length, 'new markers');
+      
+      // Convert markers to Supabase format
+      const supabaseMarkers = markers.map((marker: any) => ({
+        ...convertMarkerToSupabase(marker),
+        created_at: new Date(marker.createdAt).toISOString(),
+        updated_at: new Date(marker.updatedAt).toISOString(),
+      }));
+
+      // Insert new markers
+      const { data, error } = await supabase
+        .from('markers')
+        .insert(supabaseMarkers);
+
+      if (error) {
+        console.error('🚨 Supabase Sync: Error inserting markers:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      console.log('✅ Supabase Sync: Successfully inserted markers');
+    } else {
+      console.log('✅ Supabase Sync: No markers to insert (all deleted)');
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('🚨 Supabase Sync: Unexpected error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

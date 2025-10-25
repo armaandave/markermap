@@ -24,7 +24,7 @@ export interface Marker {
   longitude: number;
   color: string;
   address?: string;
-  images?: string[]; // Base64 image URLs
+  images?: string[]; // Cloudinary image URLs
   customFields?: Record<string, any>; // Store custom fields from KML
   createdAt: Date;
   updatedAt: Date;
@@ -34,7 +34,7 @@ export interface Marker {
 export interface MarkerImage {
   id: string;
   markerId: string;
-  url: string; // base64 blob URL
+  url: string; // Cloudinary image URL
   order: number;
   createdAt: Date;
 }

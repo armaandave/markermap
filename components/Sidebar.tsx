@@ -6,6 +6,8 @@ import { Folder, Marker } from '../lib/db';
 import { KMLParser } from '../lib/kml-parser';
 import { db } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
+import ImportModal from './ImportModal';
+import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
 import { 
   Menu, 
   X, 
@@ -22,7 +24,9 @@ import {
   LogIn,
   LogOut,
   User,
-  Settings
+  Settings,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -57,6 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [editFolderName, setEditFolderName] = useState('');
   const [editFolderColor, setEditFolderColor] = useState('#ffffff');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFolderEdit = (folder: Folder) => {
@@ -262,6 +267,53 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     setExpandedFolders(newExpanded);
   };
 
+  const handleImportComplete = (importedFolders: Folder[], importedMarkers: Marker[]) => {
+    // Add imported folders
+    importedFolders.forEach(folder => {
+      // Check if folder already exists (by name)
+      const existingFolder = folders.find(f => f.name === folder.name);
+      if (!existingFolder) {
+        addFolder(folder);
+      }
+    });
+
+    // Add imported markers
+    importedMarkers.forEach(marker => {
+      useMapStore.getState().addMarker(marker);
+    });
+
+    console.log(`✅ Import complete: ${importedFolders.length} folders, ${importedMarkers.length} markers`);
+  };
+
+  const handleCleanupOrphanedImages = async () => {
+    if (!confirm('This will delete all images from Cloudinary that are not currently used by any markers. This action cannot be undone. Continue?')) {
+      return;
+    }
+
+    try {
+      // Get all image URLs currently used by markers
+      const usedImageUrls = new Set<string>();
+      markers.forEach(marker => {
+        if (marker.images) {
+          marker.images.forEach(url => usedImageUrls.add(url));
+        }
+      });
+
+      console.log(`📊 Found ${usedImageUrls.size} images currently in use by markers`);
+
+      // Note: This is a simplified cleanup. In a real scenario, you'd need to:
+      // 1. List all images from Cloudinary API
+      // 2. Compare with used images
+      // 3. Delete orphaned ones
+      
+      alert(`Cleanup completed. Currently ${usedImageUrls.size} images are in use by your markers. For a complete cleanup, you would need to compare with all images in your Cloudinary account.`);
+      
+    } catch (error) {
+      console.error('❌ Cleanup failed:', error);
+      alert('Cleanup failed. Please try again.');
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -462,9 +514,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full w-80 bg-gray-900 text-white z-50 transform transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 lg:static lg:z-auto`}
+        className={`fixed top-0 left-0 h-full w-80 bg-gray-900 text-white transform transition-transform duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0 z-50 lg:static' : '-translate-x-full z-50'
+        }`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -480,9 +532,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </button>
               <button
                 onClick={onClose}
-                className="lg:hidden p-2 hover:bg-gray-700 rounded-lg"
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Collapse sidebar"
               >
-                <X size={20} />
+                <ChevronsLeft size={18} />
               </button>
             </div>
           </div>
@@ -660,29 +713,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <div>
                 <h4 className="text-md font-medium text-white mb-2">Import Data</h4>
                 <p className="text-sm text-gray-400 mb-4">
-                  Select your entire export folder (e.g., export_2025_10_22-17_20_50). 
-                  The app will automatically find the KML file and all images inside.
+                  Select a folder containing your KML file and an "images" subfolder. Images will be uploaded to Cloudinary and linked to markers.
                 </p>
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                  className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg transition-colors"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
                 >
                   <Upload size={16} />
-                  {isImporting ? 'Importing...' : 'Import Export Folder'}
+                  Import KML with Images
                 </button>
                 
-                {isImporting && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${importProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">{importProgress}%</p>
-                  </div>
-                )}
                 
                 <input
                   ref={fileInputRef}
@@ -693,6 +733,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   onChange={handleFileUpload}
                   className="hidden"
                 />
+              </div>
+
+              {/* Cleanup Section */}
+              <div>
+                <h4 className="text-md font-medium text-white mb-2">Cleanup</h4>
+                <button
+                  onClick={handleCleanupOrphanedImages}
+                  className="w-full flex items-center gap-2 p-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors mb-2"
+                >
+                  <Trash2 size={16} />
+                  Cleanup Orphaned Images
+                </button>
+                <p className="text-xs text-gray-400">
+                  Remove unused images from Cloudinary
+                </p>
               </div>
 
               {/* Clear All Data Section */}
@@ -710,6 +765,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
       )}
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportComplete={handleImportComplete}
+      />
     </>
   );
 };

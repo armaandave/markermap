@@ -43,7 +43,7 @@ export interface ParsedKML {
   folders: Folder[];
   markers: Marker[];
   images: MarkerImage[];
-  imageFiles: { [filename: string]: string }; // filename -> base64 data
+  imageFiles: { [filename: string]: string }; // filename -> Cloudinary URL
 }
 
 export class KMLParser {
@@ -425,25 +425,32 @@ export class KMLParser {
     return this.parseKML(text);
   }
 
-  static async parseKMLWithImages(kmlFile: File, localMediaFolder?: FileList): Promise<ParsedKML> {
+  static async parseKMLWithImages(kmlFile: File, imageFiles: File[]): Promise<ParsedKML> {
     const kmlResult = await this.parseKML(await kmlFile.text());
     
-    // Skip image processing for now to prevent memory issues
-    // Images will be stored as empty arrays
-    const imageFiles: { [filename: string]: string } = {};
+    // Convert image files to base64
+    const imageBase64Map: { [filename: string]: string } = {};
     
-    // Update markers with empty image arrays (images skipped)
-    const updatedMarkers = kmlResult.markers.map(marker => {
-      return {
-        ...marker,
-        images: [] // Skip images for now
-      };
-    });
+    console.log(`🖼️ Converting ${imageFiles.length} images to base64...`);
+    
+    for (const file of imageFiles) {
+      if (file.type.startsWith('image/')) {
+        try {
+          const base64 = await this.fileToBase64(file);
+          imageBase64Map[file.name] = base64;
+          console.log(`  ✅ Converted: ${file.name}`);
+        } catch (error) {
+          console.error(`  ❌ Failed to convert ${file.name}:`, error);
+        }
+      }
+    }
+    
+    console.log(`✅ Converted ${Object.keys(imageBase64Map).length} images to base64`);
     
     return {
       ...kmlResult,
-      markers: updatedMarkers,
-      imageFiles: {} // No images processed
+      markers: kmlResult.markers,
+      imageFiles: imageBase64Map
     };
   }
 
