@@ -9,11 +9,47 @@ export const getGoogleRedirectUri = () => {
     console.log('🔍 Client-side redirect URI:', uri);
     return uri;
   } else {
-    // Server-side: use Vercel URL or fallback to localhost
-    const uri = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}/auth/callback`
-      : 'http://localhost:3000/auth/callback';
-    console.log('🔍 Server-side redirect URI:', uri, 'VERCEL_URL:', process.env.VERCEL_URL);
+    // Server-side: Check if we're in production vs preview
+    const vercelEnv = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV;
+    const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL || 'markermap-nine.vercel.app';
+    const vercelUrl = process.env.VERCEL_URL;
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+    const normalizeBaseUrl = (value: string) => {
+      if (!value) return value;
+      return value.startsWith('http://') || value.startsWith('https://') ? value.replace(/\/+$/, '') : `https://${value.replace(/\/+$/, '')}`;
+    };
+
+    const determineBaseUrl = () => {
+      if (vercelEnv === 'production') {
+        return normalizeBaseUrl(productionDomain);
+      }
+      if (vercelUrl) {
+        return normalizeBaseUrl(vercelUrl);
+      }
+      if (configuredSiteUrl) {
+        return normalizeBaseUrl(configuredSiteUrl);
+      }
+      if (process.env.NODE_ENV === 'production') {
+        return normalizeBaseUrl(productionDomain);
+      }
+      return 'http://localhost:3000';
+    };
+
+    const baseUrl = determineBaseUrl();
+
+    const uri = `${baseUrl}/auth/callback`;
+
+    console.log(
+      '🔍 Server-side redirect URI:',
+      uri,
+      'Environment:',
+      vercelEnv,
+      'VERCEL_URL:',
+      vercelUrl,
+      'Production domain:',
+      productionDomain
+    );
     return uri;
   }
 };
