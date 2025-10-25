@@ -4,6 +4,12 @@ import { supabase, convertMarkerToSupabase, convertSupabaseToMarker } from '../.
 // Sync markers to Supabase
 export async function POST(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, skipping sync');
+      return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+    }
+
     const { markers, userId } = await request.json();
 
     if (!userId) {
@@ -40,6 +46,12 @@ export async function POST(request: Request) {
 // Get markers from Supabase
 export async function GET(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, returning empty markers');
+      return NextResponse.json({ markers: [] });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
@@ -74,6 +86,12 @@ export async function GET(request: Request) {
 // Delete all markers for a user
 export async function DELETE(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, skipping deletion');
+      return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

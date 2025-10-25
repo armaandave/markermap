@@ -4,6 +4,12 @@ import { supabase, convertFolderToSupabase, convertSupabaseToFolder, convertMark
 // Sync folders to Supabase
 export async function POST(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, skipping sync');
+      return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+    }
+
     const { folders, userId } = await request.json();
 
     if (!userId) {
@@ -40,6 +46,12 @@ export async function POST(request: Request) {
 // Get folders from Supabase
 export async function GET(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, returning empty folders');
+      return NextResponse.json({ folders: [] });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
@@ -74,6 +86,12 @@ export async function GET(request: Request) {
 // Delete folders - can delete all or individual folder
 export async function DELETE(request: Request) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('🚨 Supabase not configured, skipping deletion');
+      return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const folderId = searchParams.get('folderId');
