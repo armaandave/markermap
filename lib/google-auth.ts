@@ -1,8 +1,14 @@
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
-// Get redirect URI - always use main production URL for OAuth, regardless of branch
+// Get redirect URI - use environment variable if set, otherwise hardcode for consistency
 export const getGoogleRedirectUri = () => {
-  // Always use main production URL for OAuth to avoid Google OAuth console issues
+  // Use environment variable if set (for explicit control)
+  if (process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI) {
+    console.log('🔍 Using environment variable redirect URI:', process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI);
+    return process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI;
+  }
+  
+  // Hardcode to avoid redirect_uri_mismatch errors
   if (typeof window !== 'undefined') {
     // Client-side: check if we're on localhost or production
     if (window.location.hostname === 'localhost') {
@@ -12,13 +18,13 @@ export const getGoogleRedirectUri = () => {
     } else {
       // Always use main production URL for OAuth, even on preview branches
       const uri = 'https://markermap-nine.vercel.app/auth/callback';
-      console.log('🔍 Using main production redirect URI:', uri);
+      console.log('🔍 Using hardcoded main production redirect URI:', uri);
       return uri;
     }
   } else {
-    // Server-side: use main production URL
+    // Server-side: always use main production URL
     const uri = 'https://markermap-nine.vercel.app/auth/callback';
-    console.log('🔍 Server-side using main production redirect URI:', uri);
+    console.log('🔍 Server-side using hardcoded main production redirect URI:', uri);
     return uri;
   }
 };
