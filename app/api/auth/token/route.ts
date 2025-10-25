@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getGoogleRedirectUri } from '../../../lib/google-auth';
+import { getGoogleRedirectUri } from '../../../../lib/google-auth';
 
 export async function POST(request: Request) {
   const { code } = await request.json();
