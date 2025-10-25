@@ -17,7 +17,14 @@ export const getGoogleRedirectUri = () => {
 
     const normalizeBaseUrl = (value: string) => {
       if (!value) return value;
-      return value.startsWith('http://') || value.startsWith('https://') ? value.replace(/\/+$/, '') : `https://${value.replace(/\/+$/, '')}`;
+      const trimmed = value.replace(/\/+$/, '');
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      if (trimmed.startsWith('localhost') || trimmed.startsWith('127.0.0.1')) {
+        return `http://${trimmed}`;
+      }
+      return `https://${trimmed}`;
     };
 
     const determineBaseUrl = () => {
