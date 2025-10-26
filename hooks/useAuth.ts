@@ -19,8 +19,8 @@ export const useAuth = () => {
     const checkAuth = () => {
       try {
         console.log('🔐 useAuth: useEffect triggered - checking auth state');
-        console.log('🔐 useAuth: Checking sessionStorage for authUser...');
-        const storedUser = sessionStorage.getItem('authUser');
+        console.log('🔐 useAuth: Checking localStorage for authUser...');
+        const storedUser = localStorage.getItem('authUser');
         console.log('🔐 useAuth: Raw storedUser:', storedUser);
         
         if (storedUser) {
@@ -29,11 +29,11 @@ export const useAuth = () => {
           console.log('🔐 useAuth: Found stored user:', userData.email, 'UID:', userData.uid);
           setUser(userData);
         } else {
-          console.log('🔐 useAuth: No stored user found in sessionStorage');
+          console.log('🔐 useAuth: No stored user found in localStorage');
         }
       } catch (error) {
         console.error('🔐 useAuth: Error checking stored auth:', error);
-        sessionStorage.removeItem('authUser');
+        localStorage.removeItem('authUser');
       } finally {
         console.log('🔐 useAuth: Setting loading to false');
         setLoading(false);
@@ -52,13 +52,21 @@ export const useAuth = () => {
 
   const logout = () => {
     console.log('🔐 useAuth: Logging out...');
-    sessionStorage.removeItem('authUser');
+    localStorage.removeItem('authUser');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     setUser(null);
   };
 
-  const setAuthUser = (userData: AuthUser) => {
+  const setAuthUser = (userData: AuthUser, tokens?: { access_token?: string; refresh_token?: string }) => {
     console.log('🔐 useAuth: Setting auth user:', userData.email);
-    sessionStorage.setItem('authUser', JSON.stringify(userData));
+    localStorage.setItem('authUser', JSON.stringify(userData));
+    if (tokens?.access_token) {
+      localStorage.setItem('access_token', tokens.access_token);
+    }
+    if (tokens?.refresh_token) {
+      localStorage.setItem('refresh_token', tokens.refresh_token);
+    }
     setUser(userData);
   };
 

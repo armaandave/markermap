@@ -28,6 +28,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [currentLocationMarker, setCurrentLocationMarker] = useState<mapboxgl.Marker | null>(null);
+  const [shouldRenderMap, setShouldRenderMap] = useState(false);
 
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
     if (isAddingMarker && onAddMarker) {
@@ -63,37 +64,102 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     };
   }, [isDropdownOpen]);
 
-  // Get user's location immediately on component mount
+  // Set user's location as initial view if they have granted permission
   useEffect(() => {
-    if (navigator.geolocation) {
-      console.log('Requesting user location...');
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lng = position.coords.longitude;
-          const lat = position.coords.latitude;
-          
-          console.log('Got user location:', { lng, lat });
-          setViewState({
-            longitude: lng,
-            latitude: lat,
-            zoom: 12
-          });
-        },
-        (error) => {
-          console.log('Geolocation failed:', error.message);
-          console.log('Keeping default center of US location');
-          // Keep the default center of US location that's already set in the store
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000 // 1 minute
+    if (shouldRenderMap) return;
+
+    const checkLocationPermission = async () => {
+      try {
+        // Check if geolocation is supported
+        if (!('geolocation' in navigator)) {
+          console.log('Geolocation not supported, using default USA view');
+          setShouldRenderMap(true);
+          return;
         }
-      );
-    } else {
-      console.log('Geolocation not supported');
-    }
-  }, [setViewState]);
+
+        // Check permission status
+        if ('permissions' in navigator) {
+          const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          console.log('Geolocation permission status:', permissionResult.state);
+          
+          // Only request location if permission is granted
+          if (permissionResult.state === 'granted') {
+            console.log('Location permission granted, requesting location...');
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const lng = position.coords.longitude;
+                const lat = position.coords.latitude;
+                
+                console.log('Got user location for initial view:', { lng, lat });
+                
+                // Set the view state to user's location
+                setViewState({
+                  longitude: lng,
+                  latitude: lat,
+                  zoom: 15
+                });
+                
+                setShouldRenderMap(true);
+              },
+              (error) => {
+                console.log('Geolocation failed:', error.message);
+                console.log('Using default center of US location');
+                setShouldRenderMap(true);
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          } else {
+            console.log('Location permission not granted, using default USA view');
+            setShouldRenderMap(true);
+          }
+        } else {
+          // Fallback for browsers without permissions API
+          console.log('Permissions API not supported, trying to get location...');
+          const nav = navigator as Navigator & { geolocation: Geolocation };
+          if (nav.geolocation) {
+            nav.geolocation.getCurrentPosition(
+              (position: GeolocationPosition) => {
+                const lng = position.coords.longitude;
+                const lat = position.coords.latitude;
+                
+                console.log('Got user location for initial view:', { lng, lat });
+                
+                // Set the view state to user's location
+                setViewState({
+                  longitude: lng,
+                  latitude: lat,
+                  zoom: 15
+                });
+                
+                setShouldRenderMap(true);
+              },
+              (error: GeolocationPositionError) => {
+                console.log('Geolocation failed:', error.message);
+                console.log('Using default center of US location');
+                setShouldRenderMap(true);
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          } else {
+            setShouldRenderMap(true);
+          }
+        }
+      } catch (error) {
+        console.log('Error checking location permission:', error);
+        setShouldRenderMap(true);
+      }
+    };
+
+    checkLocationPermission();
+  }, [setViewState, shouldRenderMap]);
 
   // Create marker element
   const createMarkerElement = useCallback((marker: Marker) => {
@@ -194,6 +260,123 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     }
   }, [setSelectedMarker]);
 
+  // Add user's current location marker on page load if permission granted
+  useEffect(() => {
+    const addInitialLocationMarker = async () => {
+      if (!mapLoaded || currentLocationMarker) return;
+
+      try {
+        // Check if geolocation is supported
+        if (!('geolocation' in navigator)) {
+          console.log('Geolocation not supported');
+          return;
+        }
+
+        // Check permission status
+        if ('permissions' in navigator) {
+          const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          console.log('Geolocation permission status:', permissionResult.state);
+          
+          // Only show marker if permission is granted
+          if (permissionResult.state === 'granted') {
+            console.log('Location permission granted, adding current location marker...');
+            
+            const map = mapRef.current?.getMap();
+            if (!map) return;
+            
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const lng = position.coords.longitude;
+                const lat = position.coords.latitude;
+                
+                console.log('Adding current location marker:', { lng, lat });
+                
+                // Create temporary current location marker
+                const locationEl = document.createElement('div');
+                locationEl.style.cssText = `
+                  width: 20px;
+                  height: 20px;
+                  background-color: #007AFF;
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                `;
+                
+                const marker = new mapboxgl.Marker({
+                  element: locationEl,
+                  anchor: 'center'
+                })
+                  .setLngLat([lng, lat])
+                  .addTo(map);
+                
+                setCurrentLocationMarker(marker);
+              },
+              (error) => {
+                console.error('Error getting location for marker:', error);
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          } else {
+            console.log('Location permission not granted, not showing location marker');
+          }
+        } else {
+          // Fallback for browsers without permissions API
+          console.log('Permissions API not supported, trying to add location marker...');
+          const map = mapRef.current?.getMap();
+          if (!map) return;
+          
+          const nav = navigator as Navigator & { geolocation: Geolocation };
+          if (nav.geolocation) {
+            nav.geolocation.getCurrentPosition(
+              (position: GeolocationPosition) => {
+              const lng = position.coords.longitude;
+              const lat = position.coords.latitude;
+              
+              console.log('Adding current location marker (fallback):', { lng, lat });
+              
+              // Create temporary current location marker
+              const locationEl = document.createElement('div');
+              locationEl.style.cssText = `
+                width: 20px;
+                height: 20px;
+                background-color: #007AFF;
+                border: 3px solid white;
+                border-radius: 50%;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              `;
+              
+              const marker = new mapboxgl.Marker({
+                element: locationEl,
+                anchor: 'center'
+              })
+                .setLngLat([lng, lat])
+                .addTo(map);
+              
+              setCurrentLocationMarker(marker);
+            },
+            (error: GeolocationPositionError) => {
+              console.error('Error getting location for marker:', error);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+            }
+          );
+          }
+        }
+      } catch (error) {
+        console.log('Error checking location permission for marker:', error);
+      }
+    };
+
+    addInitialLocationMarker();
+  }, [mapLoaded, currentLocationMarker]);
+
   // Update markers on the map
   const updateMarkers = useCallback(() => {
     console.log('🗺️ MAP - updateMarkers called, markers:', markers.length, 'mapLoaded:', mapLoaded);
@@ -205,7 +388,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
 
     const map = mapRef.current.getMap();
     
-    // Clear existing markers
+    // Clear existing markers (but keep current location marker)
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
@@ -288,15 +471,15 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
         
         console.log('Got location:', { lng, lat });
         
-        // Remove existing current location marker
-        if (currentLocationMarker) {
-          currentLocationMarker.remove();
-          setCurrentLocationMarker(null);
-        }
-        
-        // Create temporary current location marker
         const map = mapRef.current?.getMap();
-        if (map) {
+        if (!map) return;
+        
+        // Update existing marker if it exists, otherwise create new one
+        if (currentLocationMarker) {
+          // Update existing marker position
+          currentLocationMarker.setLngLat([lng, lat]);
+        } else {
+          // Create new current location marker
           const locationEl = document.createElement('div');
           locationEl.style.cssText = `
             width: 20px;
@@ -315,15 +498,15 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
             .addTo(map);
           
           setCurrentLocationMarker(marker);
-          
-          // Fly to location
-          console.log('Flying to location');
-          map.flyTo({
-            center: [lng, lat],
-            zoom: 15,
-            duration: 2000
-          });
         }
+        
+        // Fly to location
+        console.log('Flying to location');
+        map.flyTo({
+          center: [lng, lat],
+          zoom: 15,
+          duration: 2000
+        });
       },
       (error) => {
         console.error('Error getting location:', error);
@@ -350,24 +533,34 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
 
   return (
     <div className="relative w-full h-full min-h-0">
-      <Map
-        ref={mapRef}
-        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-        initialViewState={viewState}
-        onMove={handleViewStateChange}
-        onClick={handleMapClick}
-        onLoad={handleMapLoad}
-        style={{ width: '100%', height: '100%', minHeight: '100%' }}
-        mapStyle={mapStyle}
-        cursor={isAddingMarker ? 'crosshair' : 'default'}
-      >
-        {/* Markers are now handled by native Mapbox GL JS */}
-      </Map>
+      {!shouldRenderMap ? (
+        <div className="flex items-center justify-center h-full bg-gray-900">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading map...</p>
+          </div>
+        </div>
+      ) : (
+        <Map
+          ref={mapRef}
+          mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
+          initialViewState={viewState}
+          onMove={handleViewStateChange}
+          onClick={handleMapClick}
+          onLoad={handleMapLoad}
+          style={{ width: '100%', height: '100%', minHeight: '100%' }}
+          mapStyle={mapStyle}
+          cursor={isAddingMarker ? 'crosshair' : 'default'}
+        >
+          {/* Markers are now handled by native Mapbox GL JS */}
+        </Map>
+      )}
 
       {/* Map Controls */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2">
-        {/* Layer Switcher */}
-        <div className="relative dropdown-container">
+      {shouldRenderMap && (
+        <div className="absolute top-4 right-4 flex flex-col gap-2">
+          {/* Layer Switcher */}
+          <div className="relative dropdown-container">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className={`bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm border border-gray-600 hover:border-gray-500 transition-colors flex items-center gap-2 transition-all duration-200 ${
@@ -398,9 +591,11 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           )}
         </div>
       </div>
+      )}
 
       {/* Action Buttons */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2 mt-16">
+      {shouldRenderMap && (
+        <div className="absolute top-4 right-4 flex flex-col gap-2 mt-16">
         {/* Add Marker Button */}
         <button
           onClick={() => setIsAddingMarker(!isAddingMarker)}
@@ -423,9 +618,11 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           <Navigation size={20} />
         </button>
       </div>
+      )}
 
       {/* Zoom Controls */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+      {shouldRenderMap && (
+        <div className="absolute bottom-4 right-4 flex flex-col gap-2">
         <button
           onClick={handleZoomIn}
           className="p-3 rounded-full bg-black/80 backdrop-blur-sm text-white hover:bg-black/90 transition-colors"
@@ -439,9 +636,10 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           −
         </button>
       </div>
+      )}
 
       {/* Adding Marker Indicator */}
-      {isAddingMarker && (
+      {shouldRenderMap && isAddingMarker && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg">
           Click on map to add marker
         </div>

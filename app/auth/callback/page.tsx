@@ -54,9 +54,17 @@ function AuthCallbackContent() {
             photoURL: userInfo.picture,
           };
 
+          // Store in localStorage for persistence across sessions
+          localStorage.setItem('authUser', JSON.stringify(authUser));
+          if (tokenData.access_token) {
+            localStorage.setItem('access_token', tokenData.access_token);
+          }
+          if (tokenData.refresh_token) {
+            localStorage.setItem('refresh_token', tokenData.refresh_token);
+          }
+
           setUser(authUser);
-          sessionStorage.setItem('authUser', JSON.stringify(authUser)); // Persist user
-          console.log('🔄 Auth Callback: User signed in and stored in session.');
+          console.log('🔄 Auth Callback: User signed in and stored persistently.');
           router.push('/'); // Redirect to main app
         } catch (err) {
           console.error('🚨 Auth Callback: Error during authentication process:', err);
