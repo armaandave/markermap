@@ -31,9 +31,10 @@ export async function GET(request: Request) {
     }
 
     const favoriteColors = data?.favorite_colors || [];
-    console.log('✅ Preferences: Fetched', favoriteColors.length, 'favorite colors');
+    const defaultMapStyle = data?.default_map_style || 'mapbox://styles/mapbox/dark-v11';
+    console.log('✅ Preferences: Fetched', favoriteColors.length, 'favorite colors, map style:', defaultMapStyle);
 
-    return NextResponse.json({ favoriteColors });
+    return NextResponse.json({ favoriteColors, defaultMapStyle });
   } catch (error) {
     console.error('🚨 Preferences: Unexpected error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -49,20 +50,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
     }
 
-    const { favoriteColors, userId } = await request.json();
+    const { favoriteColors, defaultMapStyle, userId } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     console.log('🔄 Preferences: Saving', favoriteColors.length, 'favorite colors for user:', userId);
-    console.log('🔄 Preferences: Data:', JSON.stringify({ favoriteColors, userId }));
+    console.log('🔄 Preferences: Default map style:', defaultMapStyle);
+    console.log('🔄 Preferences: Data:', JSON.stringify({ favoriteColors, defaultMapStyle, userId }));
 
     // Try to update first
     const { data: updateData, error: updateError } = await supabase
       .from('preferences')
       .update({ 
         favorite_colors: favoriteColors,
+        default_map_style: defaultMapStyle || 'mapbox://styles/mapbox/dark-v11',
         updated_at: new Date().toISOString()
       })
       .eq('user_id', userId)
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
         .insert({
           user_id: userId,
           favorite_colors: favoriteColors,
+          default_map_style: defaultMapStyle || 'mapbox://styles/mapbox/dark-v11',
         })
         .select();
 

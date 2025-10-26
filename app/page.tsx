@@ -8,6 +8,7 @@ import { useAuthContext } from '../components/AuthProvider';
 import Sidebar from '../components/Sidebar';
 import MarkerEditModal from '../components/MarkerEditModal';
 import ImportModal from '../components/ImportModal';
+import ImageGalleryModal from '../components/ImageGalleryModal';
 import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
 import { Menu, MapPin, Edit, Trash2, Upload, X, ChevronsRight } from 'lucide-react';
 
@@ -45,12 +46,15 @@ export default function Home() {
     user: storeUser,
     setUser,
     loadFromCloud,
+    loadDefaultMapStyle,
   } = useMapStore();
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const previewRef = React.useRef<HTMLDivElement>(null);
 
   // Sync preview height to images
@@ -97,6 +101,10 @@ export default function Home() {
       try {
         const currentUser = storeUser || user;
         console.log('🔍 DATA LOAD - User:', currentUser ? currentUser.uid : 'null');
+        
+        // Load default map style first using store function directly
+        const { loadDefaultMapStyle } = useMapStore.getState();
+        await loadDefaultMapStyle();
         
         if (currentUser) {
           // User signed in - load from Supabase
@@ -397,7 +405,12 @@ export default function Home() {
                     src={imageUrl}
                     alt={`${selectedMarker.title} - Image ${index + 1}`}
                     className="h-full w-auto object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-gray-600 shadow-lg bg-gray-800"
-                    onClick={() => setFullscreenImage(imageUrl)}
+                    onClick={() => {
+                      const images = selectedMarker.images ?? [];
+                      setGalleryImages(images);
+                      setGalleryInitialIndex(index);
+                      setIsGalleryOpen(true);
+                    }}
                   />
                 ))}
                 {selectedMarker.images.length > 5 && (
@@ -426,26 +439,13 @@ export default function Home() {
             onImportComplete={handleImportComplete}
           />
 
-          {/* Fullscreen Image Modal */}
-          {fullscreenImage && (
-            <div 
-              className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4"
-              onClick={() => setFullscreenImage(null)}
-            >
-              <button
-                onClick={() => setFullscreenImage(null)}
-                className="absolute top-4 right-4 bg-gray-800 hover:bg-gray-700 text-white rounded-full w-12 h-12 flex items-center justify-center transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-              <img
-                src={fullscreenImage}
-                alt="Fullscreen view"
-                className="max-w-full max-h-full object-contain rounded-lg"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
+          {/* Image Gallery Modal */}
+          <ImageGalleryModal
+            images={galleryImages}
+            initialIndex={galleryInitialIndex}
+            isOpen={isGalleryOpen}
+            onClose={() => setIsGalleryOpen(false)}
+          />
         </div>
       </div>
     </div>

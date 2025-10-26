@@ -343,6 +343,9 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     { id: 'mapbox://styles/mapbox/streets-v12', name: 'Streets' },
     { id: 'mapbox://styles/mapbox/satellite-v9', name: 'Satellite' },
     { id: 'mapbox://styles/mapbox/outdoors-v12', name: 'Outdoors' },
+    { id: 'mapbox://styles/armaandave/cmh7cxmfj001a01qn3blc9mf8', name: 'Custom' },
+    { id: 'mapbox://styles/armaandave/cmh7czqwf001b01qn1pat38p6', name: 'Custom 2' },
+    { id: 'mapbox://styles/armaandave/cmh7d458f001c01qnd4q5b1e2', name: 'Custom 3' },
   ];
 
   return (

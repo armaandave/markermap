@@ -48,6 +48,9 @@ interface MapState {
   // Map controls
   mapStyle: string;
   setMapStyle: (style: string) => void;
+  defaultMapStyle: string;
+  setDefaultMapStyle: (style: string) => void;
+  loadDefaultMapStyle: () => Promise<void>;
   
   // Import state
   isImporting: boolean;
@@ -270,6 +273,37 @@ export const useMapStore = create<MapState>((set, get) => ({
   // Map controls
   mapStyle: 'mapbox://styles/mapbox/dark-v11',
   setMapStyle: (mapStyle) => set({ mapStyle }),
+  defaultMapStyle: 'mapbox://styles/mapbox/dark-v11',
+  setDefaultMapStyle: (defaultMapStyle) => set({ defaultMapStyle }),
+  loadDefaultMapStyle: async () => {
+    const state = get();
+    if (!state.user?.uid) {
+      // User not signed in - check localStorage
+      const saved = localStorage.getItem('defaultMapStyle');
+      if (saved) {
+        set({ mapStyle: saved, defaultMapStyle: saved });
+      }
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/preferences?userId=${state.user.uid}`);
+      if (response.ok) {
+        const { defaultMapStyle } = await response.json();
+        if (defaultMapStyle) {
+          set({ mapStyle: defaultMapStyle, defaultMapStyle });
+          console.log('✅ Loaded default map style:', defaultMapStyle);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to load default map style from Supabase:', error);
+      // Fall back to localStorage
+      const saved = localStorage.getItem('defaultMapStyle');
+      if (saved) {
+        set({ mapStyle: saved, defaultMapStyle: saved });
+      }
+    }
+  },
   
   // Import state
   isImporting: false,

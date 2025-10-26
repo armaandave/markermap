@@ -61,7 +61,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
   const [newColorInput, setNewColorInput] = useState('');
   const [selectedColorPicker, setSelectedColorPicker] = useState('#000000');
+  const [defaultMapStyle, setDefaultMapStyle] = useState('mapbox://styles/mapbox/dark-v11');
+  const [isMapStyleDropdownOpen, setIsMapStyleDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Import map styles for the dropdown
+  const mapStyles = [
+    { id: 'mapbox://styles/mapbox/dark-v11', name: 'Dark' },
+    { id: 'mapbox://styles/mapbox/light-v11', name: 'Light' },
+    { id: 'mapbox://styles/mapbox/streets-v12', name: 'Streets' },
+    { id: 'mapbox://styles/mapbox/satellite-v9', name: 'Satellite' },
+    { id: 'mapbox://styles/mapbox/outdoors-v12', name: 'Outdoors' },
+    { id: 'mapbox://styles/armaandave/cmh7cxmfj001a01qn3blc9mf8', name: 'Custom' },
+    { id: 'mapbox://styles/armaandave/cmh7czqwf001b01qn1pat38p6', name: 'Custom 2' },
+    { id: 'mapbox://styles/armaandave/cmh7d458f001c01qnd4q5b1e2', name: 'Custom 3' },
+  ];
 
   const handleFolderEdit = (folder: Folder) => {
     setEditingFolder(folder);
@@ -398,9 +412,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         try {
           const response = await fetch(`/api/preferences?userId=${user.uid}`);
           if (response.ok) {
-            const { favoriteColors } = await response.json();
+            const { favoriteColors, defaultMapStyle } = await response.json();
             setFavoriteColors(favoriteColors || []);
-            console.log('✅ Loaded favorite colors from Supabase:', favoriteColors);
+            if (defaultMapStyle) {
+              setDefaultMapStyle(defaultMapStyle);
+            }
+            console.log('✅ Loaded preferences from Supabase:', { favoriteColors, defaultMapStyle });
           } else {
             const errorText = await response.text();
             console.error('Failed to load favorite colors from Supabase:', response.status, errorText);
@@ -442,6 +459,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     loadFavoriteColors();
   }, [user]);
 
+  // Close map style dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (isMapStyleDropdownOpen && !target.closest('.map-style-dropdown')) {
+        setIsMapStyleDropdownOpen(false);
+      }
+    };
+
+    if (isMapStyleDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMapStyleDropdownOpen]);
+
   // Save favorite colors to Supabase or localStorage
   const saveFavoriteColors = async (colors: string[]) => {
     console.log('💾 Saving favorite colors:', colors.length, 'colors');
@@ -461,11 +496,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ favoriteColors: colors, userId: user.uid }),
+          body: JSON.stringify({ favoriteColors: colors, defaultMapStyle, userId: user.uid }),
         });
         
         if (response.ok) {
-          console.log('✅ Saved favorite colors to Supabase');
+          console.log('✅ Saved preferences to Supabase');
         } else {
           const errorText = await response.text();
           console.error('❌ Failed to save to Supabase:', response.status, errorText);
@@ -475,6 +510,35 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       }
     } else {
       console.log('ℹ️ User not signed in, only saved to localStorage');
+    }
+  };
+
+  // Save default map style
+  const handleSaveDefaultMapStyle = async (style: string) => {
+    setDefaultMapStyle(style);
+    
+    // Always save to localStorage as a fallback
+    localStorage.setItem('defaultMapStyle', style);
+    
+    // If signed in, also save to Supabase
+    if (user) {
+      try {
+        const response = await fetch('/api/preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ favoriteColors, defaultMapStyle: style, userId: user.uid }),
+        });
+        
+        if (response.ok) {
+          console.log('✅ Saved default map style to Supabase');
+        } else {
+          console.error('❌ Failed to save default map style to Supabase');
+        }
+      } catch (error) {
+        console.error('❌ Error saving default map style to Supabase:', error);
+      }
     }
   };
 
@@ -968,6 +1032,46 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
               {activeSettingsTab === 'preferences' && (
                 <div className="space-y-6 max-w-4xl">
+                  {/* Default Map Type - Only show if user is logged in */}
+                  {user && (
+                    <div>
+                      <h3 className="text-xl font-semibold text-white mb-2">Default Map Type</h3>
+                      <p className="text-sm text-gray-400 mb-4">
+                        Choose your preferred map style that will be used when you open the app.
+                      </p>
+                      <div className="bg-gray-700/50 rounded-lg p-4">
+                        <div className="relative map-style-dropdown">
+                          <button
+                            onClick={() => setIsMapStyleDropdownOpen(!isMapStyleDropdownOpen)}
+                            className="bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm border border-gray-600 hover:border-gray-500 transition-colors flex items-center gap-2 w-full"
+                          >
+                            <span>{mapStyles.find(s => s.id === defaultMapStyle)?.name || 'Dark'}</span>
+                            <ChevronDown size={14} className={`transition-transform ml-auto ${isMapStyleDropdownOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {isMapStyleDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-1 bg-black/90 backdrop-blur-sm rounded-lg border border-gray-600 shadow-lg z-50 w-full min-w-full max-w-[200px]">
+                              {mapStyles.map((style) => (
+                                <button
+                                  key={style.id}
+                                  onClick={() => {
+                                    handleSaveDefaultMapStyle(style.id);
+                                    setIsMapStyleDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg whitespace-nowrap ${
+                                    defaultMapStyle === style.id ? 'bg-blue-600/20 text-blue-300' : 'text-white'
+                                  }`}
+                                >
+                                  {style.name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <h3 className="text-xl font-semibold text-white mb-2">Favorite Colors</h3>
                     <p className="text-sm text-gray-400 mb-6">

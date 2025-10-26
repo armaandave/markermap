@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { X } from 'lucide-react';
+import ImageGalleryModal from './ImageGalleryModal';
 
 interface ImageUploadProps {
   onImageUploaded: (imageUrl: string) => void;
@@ -18,7 +18,8 @@ export default function ImageUpload({
 }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (file: File) => {
@@ -103,7 +104,10 @@ export default function ImageUpload({
                   src={imageUrl}
                   alt={`Uploaded image ${index + 1}`}
                   className="w-full h-40 object-cover rounded-lg border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
-                  onClick={() => setFullscreenImage(imageUrl)}
+                  onClick={() => {
+                    setGalleryIndex(index);
+                    setIsGalleryOpen(true);
+                  }}
                 />
                 {onImageRemoved && (
                   <button
@@ -175,26 +179,13 @@ export default function ImageUpload({
         </p>
       </div>
 
-      {/* Fullscreen Image Modal */}
-      {fullscreenImage && (
-        <div 
-          className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4"
-          onClick={() => setFullscreenImage(null)}
-        >
-          <button
-            onClick={() => setFullscreenImage(null)}
-            className="absolute top-4 right-4 bg-gray-800 hover:bg-gray-700 text-white rounded-full w-12 h-12 flex items-center justify-center transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <img
-            src={fullscreenImage}
-            alt="Fullscreen view"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+      {/* Image Gallery Modal */}
+      <ImageGalleryModal
+        images={existingImages}
+        initialIndex={galleryIndex}
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
+      />
     </>
   );
 }

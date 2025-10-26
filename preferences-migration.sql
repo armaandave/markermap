@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS preferences (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT NOT NULL UNIQUE,
   favorite_colors TEXT[] DEFAULT '{}',
+  default_map_style TEXT DEFAULT 'mapbox://styles/mapbox/dark-v11',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
