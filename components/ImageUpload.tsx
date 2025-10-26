@@ -1,22 +1,23 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ImageGalleryModal from './ImageGalleryModal';
 
 interface ImageUploadProps {
   onImageUploaded: (imageUrl: string) => void;
   onImageRemoved?: (imageUrl: string) => void;
   existingImages?: string[];
-  maxImages?: number;
+  maxImages?: number; // Optional, defaults to unlimited
 }
 
 export default function ImageUpload({ 
   onImageUploaded, 
   onImageRemoved, 
   existingImages = [], 
-  maxImages = 5 
+  maxImages = undefined // undefined means unlimited
 }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -25,15 +26,15 @@ export default function ImageUpload({
   const handleFileUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file.');
-      return;
+      return false;
     }
 
     if (file.size > 10 * 1024 * 1024) { // 10MB limit
       alert('Image size must be less than 10MB.');
-      return;
+      return false;
     }
 
-    setUploading(true);
+    setUploadingCount(prev => prev + 1);
 
     try {
       const formData = new FormData();
@@ -50,28 +51,61 @@ export default function ImageUpload({
 
       const { imageUrl } = await response.json();
       onImageUploaded(imageUrl);
+      return true;
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload image. Please try again.');
+      alert(`Failed to upload ${file.name}. Please try again.`);
+      return false;
     } finally {
-      setUploading(false);
+      setUploadingCount(prev => prev - 1);
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleFileUpload(file);
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      // If there's a maxImages limit, enforce it
+      let filesToUpload = Array.from(files);
+      
+      if (maxImages !== undefined) {
+        const remainingSlots = maxImages - existingImages.length;
+        filesToUpload = filesToUpload.slice(0, remainingSlots);
+        
+        if (files.length > remainingSlots) {
+          alert(`You can only add ${remainingSlots} more image(s). The remaining files will be ignored.`);
+        }
+      }
+      
+      // Upload all files in parallel
+      await Promise.all(filesToUpload.map(file => handleFileUpload(file)));
+    }
+    
+    // Reset the input so the same files can be selected again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragOver(false);
 
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      handleFileUpload(file);
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      // If there's a maxImages limit, enforce it
+      let filesToUpload = Array.from(files);
+      
+      if (maxImages !== undefined) {
+        const remainingSlots = maxImages - existingImages.length;
+        filesToUpload = filesToUpload.slice(0, remainingSlots);
+        
+        if (files.length > remainingSlots) {
+          alert(`You can only add ${remainingSlots} more image(s). The remaining files will be ignored.`);
+        }
+      }
+      
+      // Upload all files in parallel
+      await Promise.all(filesToUpload.map(file => handleFileUpload(file)));
     }
   };
 
@@ -90,7 +124,12 @@ export default function ImageUpload({
     }
   };
 
-  const canAddMoreImages = existingImages.length < maxImages;
+  const canAddMoreImages = maxImages === undefined || existingImages.length < maxImages;
+  
+  // Update uploading state based on count
+  useEffect(() => {
+    setUploading(uploadingCount > 0);
+  }, [uploadingCount]);
 
   return (
     <>
@@ -141,6 +180,7 @@ export default function ImageUpload({
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -155,7 +195,7 @@ export default function ImageUpload({
               ) : (
                 <>
                   <p className="text-sm">
-                    Drag and drop an image here, or{' '}
+                    Drag and drop image(s) here, or{' '}
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="text-blue-500 hover:text-blue-700 underline"
@@ -164,7 +204,7 @@ export default function ImageUpload({
                     </button>
                   </p>
                   <p className="text-xs text-gray-400">
-                    Max {maxImages} images, 10MB each
+                    {maxImages !== undefined ? `Max ${maxImages} images, ` : ''}10MB each. You can select multiple at once.
                   </p>
                 </>
               )}
@@ -175,7 +215,7 @@ export default function ImageUpload({
 
         {/* Image Count */}
         <p className="text-xs text-gray-500 text-center">
-          {existingImages.length} / {maxImages} images
+          {existingImages.length}{maxImages !== undefined ? ` / ${maxImages}` : ''} images
         </p>
       </div>
 

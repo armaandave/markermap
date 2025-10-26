@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Marker, Folder } from '../lib/db';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, ChevronDown } from 'lucide-react';
 import ImageUpload from './ImageUpload';
 import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
 
@@ -32,6 +32,8 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
 
   const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
   const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
+  const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
+  const folderDropdownRef = useRef<HTMLDivElement>(null);
 
   // Load favorite colors on mount
   useEffect(() => {
@@ -60,6 +62,23 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
       });
     }
   }, [marker]);
+
+  // Close folder dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (folderDropdownRef.current && !folderDropdownRef.current.contains(event.target as Node)) {
+        setIsFolderDropdownOpen(false);
+      }
+    };
+
+    if (isFolderDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFolderDropdownOpen]);
 
   const handleColorSelect = (color: string) => {
     setFormData(prev => ({ ...prev, color }));
@@ -199,14 +218,41 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
             </div>
           </div>
 
-          {/* Folder Information */}
-          <div>
+          {/* Folder Selection */}
+          <div ref={folderDropdownRef} className="relative">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Folder
             </label>
-            <div className="p-3 bg-gray-700 border border-gray-600 rounded-lg text-white">
-              {folders.find(f => f.id === formData.folderId)?.name || 'Unknown Folder'}
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsFolderDropdownOpen(!isFolderDropdownOpen)}
+              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 hover:bg-gray-600 transition-colors flex items-center justify-between"
+            >
+              <span>{folders.find(f => f.id === formData.folderId)?.name || 'Select a folder'}</span>
+              <ChevronDown size={18} className={`text-gray-400 transition-transform ${isFolderDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {isFolderDropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+                {folders.map(folder => (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, folderId: folder.id }));
+                      setIsFolderDropdownOpen(false);
+                    }}
+                    className={`w-full px-4 py-3 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                      formData.folderId === folder.id
+                        ? 'bg-blue-600/20 text-blue-300'
+                        : 'text-white hover:bg-gray-600'
+                    }`}
+                  >
+                    {folder.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Image Upload */}
@@ -218,7 +264,6 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
               onImageUploaded={handleImageUploaded}
               onImageRemoved={handleImageRemoved}
               existingImages={formData.images || []}
-              maxImages={5}
             />
           </div>
 
