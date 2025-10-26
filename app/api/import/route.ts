@@ -54,10 +54,11 @@ export async function POST(request: NextRequest) {
             uploadSuccess++;
             continue;
           }
-        } catch (checkError: any) {
+        } catch (checkError: unknown) {
           // Image doesn't exist (404), continue with upload
-          if (checkError.error?.http_code !== 404) {
-            console.warn(`⚠️ Error checking ${file.name}:`, checkError.message);
+          const error = checkError as { error?: { http_code?: number }; message?: string };
+          if (error.error?.http_code !== 404) {
+            console.warn(`⚠️ Error checking ${file.name}:`, error.message || 'Unknown error');
           }
         }
 
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
           ).end(buffer);
         });
 
-        // @ts-ignore
+        // @ts-expect-error - Cloudinary types don't include secure_url but it exists
         const imageUrl = uploadResult.secure_url;
         imageUrlMap[file.name] = imageUrl;
         uploadSuccess++;

@@ -51,7 +51,7 @@ export interface MarkerCustomValue {
   id: string;
   markerId: string;
   fieldId: string;
-  value: any; // JSON value
+  value: string | number | boolean | null; // JSON value
   createdAt: Date;
 }
 

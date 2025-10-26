@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Folder, Marker } from './db';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
@@ -38,17 +39,17 @@ export interface SupabaseMarker {
 }
 
 // Helper functions to convert between local and Supabase formats
-export const convertFolderToSupabase = (folder: any): Omit<SupabaseFolder, 'created_at' | 'updated_at'> => ({
+export const convertFolderToSupabase = (folder: Folder): Omit<SupabaseFolder, 'created_at' | 'updated_at'> => ({
   id: folder.id,
   name: folder.name,
   color: folder.color,
   icon: folder.icon,
   visible: folder.visible,
   order: folder.order,
-  user_id: folder.userId,
+  user_id: folder.userId || '',
 });
 
-export const convertSupabaseToFolder = (supabaseFolder: SupabaseFolder): any => ({
+export const convertSupabaseToFolder = (supabaseFolder: SupabaseFolder): Folder => ({
   id: supabaseFolder.id,
   name: supabaseFolder.name,
   color: supabaseFolder.color,
@@ -60,7 +61,7 @@ export const convertSupabaseToFolder = (supabaseFolder: SupabaseFolder): any => 
   userId: supabaseFolder.user_id,
 });
 
-export const convertMarkerToSupabase = (marker: any): Omit<SupabaseMarker, 'created_at' | 'updated_at'> => ({
+export const convertMarkerToSupabase = (marker: Marker): Omit<SupabaseMarker, 'created_at' | 'updated_at'> => ({
   id: marker.id,
   title: marker.title,
   description: marker.description || '',
@@ -70,10 +71,10 @@ export const convertMarkerToSupabase = (marker: any): Omit<SupabaseMarker, 'crea
   color: marker.color,
   custom_fields: marker.customFields,
   images: marker.images || [],
-  user_id: marker.userId,
+  user_id: marker.userId || '',
 });
 
-export const convertSupabaseToMarker = (supabaseMarker: SupabaseMarker): any => ({
+export const convertSupabaseToMarker = (supabaseMarker: SupabaseMarker): Marker => ({
   id: supabaseMarker.id,
   title: supabaseMarker.title,
   description: supabaseMarker.description,

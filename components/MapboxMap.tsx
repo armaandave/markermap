@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import Map, { ViewState } from 'react-map-gl';
+import Map, { ViewState, MapRef } from 'react-map-gl';
 import { useMapStore } from '../store/mapStore';
 import { Marker } from '../lib/db';
-import { MapPin, Plus, Navigation, ChevronDown } from 'lucide-react';
+import { Plus, Navigation, ChevronDown } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 
 interface MapboxMapProps {
@@ -12,7 +12,7 @@ interface MapboxMapProps {
 }
 
 const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<MapRef | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const {
     viewState,
@@ -21,12 +21,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     folders,
     mapStyle,
     setMapStyle,
-    selectedMarker,
     setSelectedMarker,
-    selectedFolderId,
-    setSelectedFolderId,
-    addMarker,
-    deleteMarker,
   } = useMapStore();
 
   const [isAddingMarker, setIsAddingMarker] = useState(false);
@@ -34,7 +29,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [currentLocationMarker, setCurrentLocationMarker] = useState<mapboxgl.Marker | null>(null);
 
-  const handleMapClick = useCallback((event: any) => {
+  const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
     if (isAddingMarker && onAddMarker) {
       const { lng, lat } = event.lngLat;
       onAddMarker({ lng, lat });
@@ -225,7 +220,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     console.log('🗺️ MAP - First marker coords:', visibleMarkers[0] ? `${visibleMarkers[0].longitude}, ${visibleMarkers[0].latitude}` : 'none');
 
     // Add new markers
-    visibleMarkers.forEach((marker, index) => {
+    visibleMarkers.forEach((marker) => {
       const el = createMarkerElement(marker);
       console.log('🗺️ MAP - Creating marker element for:', marker.id, 'Element:', el);
       

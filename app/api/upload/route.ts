@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       ).end(buffer);
     });
 
-    // @ts-ignore
+    // @ts-expect-error - Cloudinary types don't include secure_url but it exists
     return NextResponse.json({ imageUrl: uploadResult.secure_url }, { status: 200 });
 
   } catch (error) {

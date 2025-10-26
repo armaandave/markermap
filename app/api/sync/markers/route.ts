@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase, convertMarkerToSupabase, convertSupabaseToMarker } from '../../../../lib/supabase';
+import { Marker } from '../../../../lib/db';
 
 // Sync markers to Supabase
 export async function POST(request: Request) {
@@ -35,14 +36,14 @@ export async function POST(request: Request) {
       console.log('🔄 Supabase Sync: Inserting', markers.length, 'new markers');
       
       // Convert markers to Supabase format
-      const supabaseMarkers = markers.map((marker: any) => ({
+      const supabaseMarkers = markers.map((marker: Marker) => ({
         ...convertMarkerToSupabase(marker),
         created_at: new Date(marker.createdAt).toISOString(),
         updated_at: new Date(marker.updatedAt).toISOString(),
       }));
 
       // Insert new markers
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('markers')
         .insert(supabaseMarkers);
 

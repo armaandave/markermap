@@ -26,12 +26,8 @@ const MapboxMap = dynamic(() => import('../components/MapboxMap'), {
 
 export default function Home() {
   const { user, loading: authLoading } = useAuthContext();
-  const [isClient, setIsClient] = useState(false);
-
-  // Ensure we're on the client side
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  // We're in a 'use client' component, so we're always on the client side
+  const [isClient] = useState(true);
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -48,7 +44,6 @@ export default function Home() {
     setSelectedFolderId,
     user: storeUser,
     setUser,
-    syncToCloud,
     loadFromCloud,
   } = useMapStore();
 
@@ -108,7 +103,7 @@ export default function Home() {
           try {
             await loadFromCloud();
             console.log('🔍 DATA LOAD - Cloud load successful');
-          } catch (supabaseError) {
+          } catch {
             console.log('🔍 DATA LOAD - Cloud failed, using local fallback');
             const [loadedFolders, loadedMarkers] = await Promise.all([
               getUserFolders(currentUser.uid),
@@ -152,7 +147,7 @@ export default function Home() {
         
         console.log('🔍 DATA LOAD - Complete, setting isLoaded');
         setIsLoaded(true);
-      } catch (error) {
+      } catch {
         console.log('🔍 DATA LOAD - Error, using fallback');
         const defaultFolder: Folder = {
           id: 'default-folder',
@@ -200,7 +195,7 @@ export default function Home() {
         loadData().finally(() => {
           clearTimeout(maxTimeout);
         });
-      }, [user, authLoading, storeUser]);
+      }, [user, authLoading, storeUser, isLoaded, loadFromCloud, setFolders, setMarkers, setSelectedFolderId]);
 
   // Note: Data saving is now handled by individual store functions (addMarker, updateMarker, etc.)
   // which save with the correct userId context. No bulk save needed.
@@ -259,14 +254,14 @@ export default function Home() {
   };
 
   const handleImportComplete = (importedFolders: Folder[], importedMarkers: Marker[]) => {
-    // Add imported folders
-    importedFolders.forEach(folder => {
-      // Check if folder already exists (by name)
-      const existingFolder = folders.find(f => f.name === folder.name);
-      if (!existingFolder) {
-        setFolders((prev: Folder[]) => [...prev, folder]);
-      }
-    });
+    // Add imported folders that don't already exist
+    const newFolders = importedFolders.filter(folder => 
+      !folders.find(f => f.name === folder.name)
+    );
+    
+    if (newFolders.length > 0) {
+      setFolders([...folders, ...newFolders]);
+    }
 
     // Add imported markers
     importedMarkers.forEach(marker => {

@@ -32,11 +32,15 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
 
   const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
 
+  // Sync form data when marker prop changes
   useEffect(() => {
     if (marker) {
-      setFormData({
-        ...marker,
-        customFields: marker.customFields || {},
+      // Use a microtask to avoid synchronous setState
+      Promise.resolve().then(() => {
+        setFormData({
+          ...marker,
+          customFields: marker.customFields || {},
+        });
       });
     }
   }, [marker]);

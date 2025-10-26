@@ -7,9 +7,7 @@ import { KMLParser } from '../lib/kml-parser';
 import { db } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
 import ImportModal from './ImportModal';
-import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
 import { 
-  Menu, 
   X, 
   Folder as FolderIcon, 
   Plus, 
@@ -23,10 +21,8 @@ import {
   Trash2,
   LogIn,
   LogOut,
-  User,
   Settings,
-  ChevronsLeft,
-  ChevronsRight
+  ChevronsLeft
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,10 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     setMarkers,
     setFolders,
     setSelectedMarker,
-    isImporting,
-    setIsImporting,
-    importProgress,
-    setImportProgress,
     selectedFolderId,
     setSelectedFolderId,
   } = useMapStore();
@@ -318,21 +310,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsImporting(true);
-    setImportProgress(0);
-
     try {
-      // Simulate progress
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        currentProgress += 10;
-        if (currentProgress >= 90) {
-          clearInterval(progressInterval);
-          setImportProgress(90);
-        } else {
-          setImportProgress(currentProgress);
-        }
-      }, 200);
 
       // Handle folder upload - look for KML and images recursively
       const allFiles = Array.from(files);
@@ -344,8 +322,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
       if (!kmlFile) {
         alert('No KML file found in the selected folder. Please make sure your export folder contains a .kml file.');
-        setIsImporting(false);
-        setImportProgress(0);
         return;
       }
 
@@ -353,7 +329,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       console.log(`Found ${imageFiles.length} image files`);
       console.log('Image files:', imageFiles.map(f => f.name));
 
-      const parsedData = await KMLParser.parseKMLWithImages(kmlFile, imageFiles.length > 0 ? imageFiles as any : undefined);
+      const parsedData = await KMLParser.parseKMLWithImages(kmlFile, imageFiles);
       
       console.log('Parsed data:', {
         folders: parsedData.folders.length,
@@ -385,12 +361,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         useMapStore.getState().addMarker(markerWithUser);
       }
 
-      setImportProgress(100);
-      setTimeout(() => {
-        setIsImporting(false);
-        setImportProgress(0);
-        alert(`Import successful! Added ${parsedData.folders.length} folders and ${parsedData.markers.length} markers. Images were skipped to prevent memory issues.`);
-      }, 500);
+      alert(`Import successful! Added ${parsedData.folders.length} folders and ${parsedData.markers.length} markers. Images were skipped to prevent memory issues.`);
 
     } catch (error) {
       console.error('Import failed:', error);
@@ -401,9 +372,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       } else {
         alert('Failed to import KML file. Please check the file format and try again.');
       }
-      
-      setIsImporting(false);
-      setImportProgress(0);
     }
   };
 
@@ -713,7 +681,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <div>
                 <h4 className="text-md font-medium text-white mb-2">Import Data</h4>
                 <p className="text-sm text-gray-400 mb-4">
-                  Select a folder containing your KML file and an "images" subfolder. Images will be uploaded to Cloudinary and linked to markers.
+                  Select a folder containing your KML file and an &quot;images&quot; subfolder. Images will be uploaded to Cloudinary and linked to markers.
                 </p>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
@@ -728,7 +696,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  {...({ webkitdirectory: "true", directory: "true" } as any)}
+                  {...({ webkitdirectory: 'true', directory: 'true' } as React.InputHTMLAttributes<HTMLInputElement>)}
                   accept=".kml,.jpg,.jpeg"
                   onChange={handleFileUpload}
                   className="hidden"

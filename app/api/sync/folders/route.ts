@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabase, convertFolderToSupabase, convertSupabaseToFolder, convertMarkerToSupabase, convertSupabaseToMarker } from '../../../../lib/supabase';
+import { supabase, convertFolderToSupabase, convertSupabaseToFolder } from '../../../../lib/supabase';
+import { Folder } from '../../../../lib/db';
 
 // Sync folders to Supabase
 export async function POST(request: Request) {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     console.log('🔄 Supabase Sync: Syncing', folders.length, 'folders for user:', userId);
 
     // Convert folders to Supabase format
-    const supabaseFolders = folders.map((folder: any) => ({
+    const supabaseFolders = folders.map((folder: Folder) => ({
       ...convertFolderToSupabase(folder),
       created_at: new Date(folder.createdAt).toISOString(),
       updated_at: new Date(folder.updatedAt).toISOString(),

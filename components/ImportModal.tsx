@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, Image, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { Folder, Marker } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportComplete: (folders: Folder[], markers: Marker[]) => void;
+  onImportComplete?: (folders: Folder[], markers: Marker[]) => void;
 }
 
 interface ImportStats {
@@ -17,7 +17,7 @@ interface ImportStats {
   failed: number;
 }
 
-export default function ImportModal({ isOpen, onClose, onImportComplete }: ImportModalProps) {
+export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const { user } = useAuthContext();
   const [selectedFolder, setSelectedFolder] = useState<FileList | null>(null);
   const [kmlFile, setKmlFile] = useState<File | null>(null);
@@ -195,9 +195,9 @@ export default function ImportModal({ isOpen, onClose, onImportComplete }: Impor
           <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
             <h3 className="text-blue-300 font-medium mb-2">How to import:</h3>
             <ol className="text-blue-200 text-sm space-y-1 list-decimal list-inside">
-              <li>Select a folder that contains your KML file and an "images" subfolder</li>
+              <li>Select a folder that contains your KML file and an &quot;images&quot; subfolder</li>
               <li>The KML file should be in the root of the folder</li>
-              <li>All images should be in the "images" subfolder</li>
+              <li>All images should be in the &quot;images&quot; subfolder</li>
               <li>Images will be uploaded to Cloudinary and linked to markers</li>
               <li>Folders and markers will be imported to your map</li>
             </ol>
@@ -237,7 +237,7 @@ export default function ImportModal({ isOpen, onClose, onImportComplete }: Impor
               <input
                 ref={folderInputRef}
                 type="file"
-                {...({ webkitdirectory: "true", directory: "true" } as any)}
+                {...({ webkitdirectory: 'true', directory: 'true' } as React.InputHTMLAttributes<HTMLInputElement>)}
                 onChange={handleFolderSelect}
                 className="hidden"
               />
