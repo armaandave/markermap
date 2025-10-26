@@ -31,6 +31,22 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
   });
 
   const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
+  const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
+
+  // Load favorite colors on mount
+  useEffect(() => {
+    const loadFavoriteColors = () => {
+      const saved = localStorage.getItem('favoriteColors');
+      if (saved) {
+        try {
+          setFavoriteColors(JSON.parse(saved));
+        } catch {
+          setFavoriteColors([]);
+        }
+      }
+    };
+    loadFavoriteColors();
+  }, []);
 
   // Sync form data when marker prop changes
   useEffect(() => {
@@ -44,6 +60,10 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
       });
     }
   }, [marker]);
+
+  const handleColorSelect = (color: string) => {
+    setFormData(prev => ({ ...prev, color }));
+  };
 
   const handleSave = () => {
     const updatedMarker = {
@@ -149,7 +169,7 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Color
+                Color: <span className="text-blue-400">{formData.color}</span>
               </label>
               <input
                 type="color"
@@ -157,6 +177,25 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
                 onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
                 className="w-full p-1 bg-gray-700 border border-gray-600 rounded-lg h-12"
               />
+              {favoriteColors.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-400 mb-2">Favorite colors:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {favoriteColors.map((color, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleColorSelect(color)}
+                        className="w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 cursor-pointer"
+                        style={{ 
+                          backgroundColor: color,
+                          borderColor: formData.color === color ? '#3b82f6' : '#4b5563'
+                        }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

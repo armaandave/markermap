@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase, convertMarkerToSupabase, convertSupabaseToMarker } from '../../../../lib/supabase';
+import { supabaseAdmin, convertMarkerToSupabase, convertSupabaseToMarker } from '../../../../lib/supabase';
 import { Marker } from '../../../../lib/db';
 
 // Sync markers to Supabase
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     // First, delete all existing markers for this user
     console.log('🔄 Supabase Sync: Deleting existing markers for user:', userId);
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('markers')
       .delete()
       .eq('user_id', userId);
@@ -36,16 +36,16 @@ export async function POST(request: Request) {
       console.log('🔄 Supabase Sync: Inserting', markers.length, 'new markers');
       
       // Convert markers to Supabase format
-      const supabaseMarkers = markers.map((marker: Marker) => ({
+      const supabaseAdminMarkers = markers.map((marker: Marker) => ({
         ...convertMarkerToSupabase(marker),
         created_at: new Date(marker.createdAt).toISOString(),
         updated_at: new Date(marker.updatedAt).toISOString(),
       }));
 
       // Insert new markers
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('markers')
-        .insert(supabaseMarkers);
+        .insert(supabaseAdminMarkers);
 
       if (error) {
         console.error('🚨 Supabase Sync: Error inserting markers:', error);
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
 
     console.log('🔄 Supabase Sync: Fetching markers for user:', userId);
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('markers')
       .select('*')
       .eq('user_id', userId)
@@ -123,7 +123,7 @@ export async function DELETE(request: Request) {
     console.log('🗑️ Supabase Delete: Deleting all markers for user:', userId);
 
     // Delete all markers for this user
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('markers')
       .delete()
       .eq('user_id', userId);

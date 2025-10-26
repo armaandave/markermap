@@ -15,6 +15,9 @@ export interface KMLPlacemark {
   }[];
   styleUrl?: string[];
   Style?: KMLStyle[]; // Add this for inline styles
+  TimeStamp?: {
+    when?: string[];
+  }[];
 }
 
 export interface KMLFolder {
@@ -153,6 +156,16 @@ export class KMLParser {
     // Extract image metadata from ExtendedData (more reliable than parsing HTML)
     const imageFiles = this.parseImageMetadata(placemark.ExtendedData);
     
+    // Extract timestamp if available
+    let createdAt = new Date();
+    if (placemark.TimeStamp?.[0]?.when?.[0]) {
+      try {
+        createdAt = new Date(placemark.TimeStamp[0].when[0]);
+      } catch (e) {
+        console.warn('Failed to parse timestamp:', placemark.TimeStamp[0].when[0]);
+      }
+    }
+    
     // Extract description and clean up HTML
     let description = placemark.description?.[0] || '';
     if (description.includes('<![CDATA[')) {
@@ -223,7 +236,7 @@ export class KMLParser {
           address: '', // Will be filled by reverse geocoding later
           customFields: customFields, // Store custom fields from KML
           images: imageFiles, // Store image filenames from KML
-          createdAt: new Date(),
+          createdAt: createdAt,
           updatedAt: new Date(),
         };
   }

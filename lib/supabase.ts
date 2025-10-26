@@ -10,6 +10,10 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Admin client for server-side API routes (bypasses RLS)
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
 // Database types based on your schema
 export interface SupabaseFolder {
   id: string;

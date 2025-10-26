@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useMapStore } from '../store/mapStore';
 import { Folder, Marker } from '../lib/db';
 import { KMLParser } from '../lib/kml-parser';
 import { db } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
 import ImportModal from './ImportModal';
+import UpdateDatesModal from './UpdateDatesModal';
 import { 
   X, 
   Folder as FolderIcon, 
@@ -22,7 +23,8 @@ import {
   LogIn,
   LogOut,
   Settings,
-  ChevronsLeft
+  ChevronsLeft,
+  Clock
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,6 +56,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [editFolderColor, setEditFolderColor] = useState('#ffffff');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isUpdateDatesModalOpen, setIsUpdateDatesModalOpen] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState('preferences');
+  const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
+  const [newColorInput, setNewColorInput] = useState('');
+  const [selectedColorPicker, setSelectedColorPicker] = useState('#000000');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFolderEdit = (folder: Folder) => {
@@ -383,6 +390,141 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return folders.filter(folder => folder.parentId === parentId);
   };
 
+  // Load favorite colors from Supabase or localStorage
+  useEffect(() => {
+    const loadFavoriteColors = async () => {
+      if (user) {
+        // User is signed in - load from Supabase
+        try {
+          const response = await fetch(`/api/preferences?userId=${user.uid}`);
+          if (response.ok) {
+            const { favoriteColors } = await response.json();
+            setFavoriteColors(favoriteColors || []);
+            console.log('✅ Loaded favorite colors from Supabase:', favoriteColors);
+          } else {
+            const errorText = await response.text();
+            console.error('Failed to load favorite colors from Supabase:', response.status, errorText);
+            // Fall back to localStorage
+            const saved = localStorage.getItem('favoriteColors');
+            if (saved) {
+              try {
+                setFavoriteColors(JSON.parse(saved));
+              } catch {
+                setFavoriteColors([]);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error loading favorite colors:', error);
+          // Fall back to localStorage
+          const saved = localStorage.getItem('favoriteColors');
+          if (saved) {
+            try {
+              setFavoriteColors(JSON.parse(saved));
+            } catch {
+              setFavoriteColors([]);
+            }
+          }
+        }
+      } else {
+        // User is signed out - load from localStorage
+        const saved = localStorage.getItem('favoriteColors');
+        if (saved) {
+          try {
+            setFavoriteColors(JSON.parse(saved));
+          } catch {
+            setFavoriteColors([]);
+          }
+        }
+      }
+    };
+
+    loadFavoriteColors();
+  }, [user]);
+
+  // Save favorite colors to Supabase or localStorage
+  const saveFavoriteColors = async (colors: string[]) => {
+    console.log('💾 Saving favorite colors:', colors.length, 'colors');
+    console.log('👤 User signed in:', !!user, user?.uid);
+    
+    // Always save to localStorage as a fallback
+    localStorage.setItem('favoriteColors', JSON.stringify(colors));
+    setFavoriteColors(colors);
+    console.log('✅ Saved to localStorage');
+    
+    // If signed in, also save to Supabase
+    if (user) {
+      try {
+        console.log('🔄 Attempting to save to Supabase...');
+        const response = await fetch('/api/preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ favoriteColors: colors, userId: user.uid }),
+        });
+        
+        if (response.ok) {
+          console.log('✅ Saved favorite colors to Supabase');
+        } else {
+          const errorText = await response.text();
+          console.error('❌ Failed to save to Supabase:', response.status, errorText);
+        }
+      } catch (error) {
+        console.error('❌ Error saving to Supabase:', error);
+      }
+    } else {
+      console.log('ℹ️ User not signed in, only saved to localStorage');
+    }
+  };
+
+  // Add a favorite color
+  const handleAddFavoriteColor = async () => {
+    const color = newColorInput.trim();
+    if (!color) return;
+
+    // Normalize the color to hex format
+    let normalizedColor = color;
+    
+    // Try to convert to hex if it's not already
+    if (color.startsWith('#')) {
+      normalizedColor = color;
+    } else if (color.startsWith('rgb')) {
+      // Extract RGB values and convert to hex
+      const rgbMatch = color.match(/\d+/g);
+      if (rgbMatch && rgbMatch.length >= 3) {
+        const r = parseInt(rgbMatch[0]);
+        const g = parseInt(rgbMatch[1]);
+        const b = parseInt(rgbMatch[2]);
+        normalizedColor = `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+      }
+    }
+
+    // Validate hex color
+    if (!/^#[0-9A-F]{6}$/i.test(normalizedColor)) {
+      alert('Please enter a valid color code (hex or rgb format)');
+      return;
+    }
+
+    // Add to favorites if not already there
+    if (!favoriteColors.includes(normalizedColor)) {
+      await saveFavoriteColors([...favoriteColors, normalizedColor]);
+      setNewColorInput('');
+    }
+  };
+
+  // Add color from color picker
+  const handleAddColorFromPicker = async () => {
+    if (!favoriteColors.includes(selectedColorPicker)) {
+      await saveFavoriteColors([...favoriteColors, selectedColorPicker]);
+    }
+  };
+
+  // Remove a favorite color
+  const handleRemoveFavoriteColor = async (color: string) => {
+    await saveFavoriteColors(favoriteColors.filter(c => c !== color));
+  };
+
   const renderFolder = (folder: Folder, level: number = 0) => {
     const hasChildren = getChildFolders(folder.id).length > 0;
     const isExpanded = expandedFolders.has(folder.id);
@@ -664,71 +806,255 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-96 max-w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Settings</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg w-[95vw] h-[90vh] max-w-7xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
+              <h2 className="text-2xl font-semibold text-white">Settings</h2>
               <button
                 onClick={() => setShowSettingsModal(false)}
                 className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
             </div>
-            
-            <div className="space-y-4">
-              {/* Import Section */}
-              <div>
-                <h4 className="text-md font-medium text-white mb-2">Import Data</h4>
-                <p className="text-sm text-gray-400 mb-4">
-                  Select a folder containing your KML file and an &quot;images&quot; subfolder. Images will be uploaded to Cloudinary and linked to markers.
-                </p>
-                <button
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                >
-                  <Upload size={16} />
-                  Import KML with Images
-                </button>
-                
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  {...({ webkitdirectory: 'true', directory: 'true' } as React.InputHTMLAttributes<HTMLInputElement>)}
-                  accept=".kml,.jpg,.jpeg"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
 
-              {/* Cleanup Section */}
-              <div>
-                <h4 className="text-md font-medium text-white mb-2">Cleanup</h4>
-                <button
-                  onClick={handleCleanupOrphanedImages}
-                  className="w-full flex items-center gap-2 p-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors mb-2"
-                >
-                  <Trash2 size={16} />
-                  Cleanup Orphaned Images
-                </button>
-                <p className="text-xs text-gray-400">
-                  Remove unused images from Cloudinary
-                </p>
-              </div>
+            {/* Tabs */}
+            <div className="flex items-center gap-1 px-6 pt-4 border-b border-gray-700 flex-shrink-0">
+              <button
+                onClick={() => setActiveSettingsTab('preferences')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeSettingsTab === 'preferences'
+                    ? 'text-blue-400 border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Preferences
+              </button>
+              <button
+                onClick={() => setActiveSettingsTab('imports')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeSettingsTab === 'imports'
+                    ? 'text-blue-400 border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Imports
+              </button>
+            </div>
 
-              {/* Clear All Data Section */}
-              <div>
-                <h4 className="text-md font-medium text-white mb-2">Danger Zone</h4>
-                <button
-                  onClick={handleClearAllData}
-                  className="w-full flex items-center gap-2 p-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                >
-                  <Trash2 size={16} />
-                  Clear All Data
-                </button>
-              </div>
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeSettingsTab === 'imports' && (
+                <div className="space-y-6 max-w-4xl">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Import Data</h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      Import markers, folders, and images from KML files. Your data can be imported from Google Maps exports or custom KML files.
+                    </p>
+
+                    {/* Import KML with Images Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Import KML with Images</h4>
+                          <p className="text-sm text-gray-400">
+                            Select a folder containing your KML file and images. Images will be uploaded to Cloudinary and linked to markers.
+                          </p>
+                          <div className="mt-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                            <p className="text-blue-200 text-xs font-medium mb-2">Expected folder structure:</p>
+                            <div className="text-blue-100 text-xs font-mono space-y-1">
+                              <div>📁 Your Folder/</div>
+                              <div className="ml-4">📄 data.kml</div>
+                              <div className="ml-4">🖼️ image1.jpg</div>
+                              <div className="ml-4">🖼️ image2.jpg</div>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsImportModalOpen(true)}
+                          className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Upload size={18} />
+                          Import KML with Images
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Update Dates Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Update Dates from KML</h4>
+                          <p className="text-sm text-gray-400">
+                            Update creation dates for existing markers based on your original KML file.
+                          </p>
+                          <div className="mt-3 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                            <p className="text-purple-200 text-xs">
+                              This tool will match markers by coordinates and update their creation dates from your original KML file.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsUpdateDatesModalOpen(true)}
+                          className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Clock size={18} />
+                          Update Dates
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cleanup Orphaned Images Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Cleanup Orphaned Images</h4>
+                          <p className="text-sm text-gray-400">
+                            Remove unused images from Cloudinary that are no longer referenced by any markers.
+                          </p>
+                          <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                            <p className="text-yellow-200 text-xs">
+                              This will scan your Cloudinary account and delete images that aren&apos;t being used by any markers.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleCleanupOrphanedImages}
+                          className="flex items-center gap-2 px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Trash2 size={18} />
+                          Cleanup Images
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Clear All Data Section */}
+                    <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-red-400 mb-2">Clear All Data</h4>
+                          <p className="text-sm text-gray-400">
+                            Permanently delete all markers, folders, and associated images from your account.
+                          </p>
+                          <div className="mt-3 p-3 bg-red-800/30 border border-red-500/30 rounded-lg">
+                            <p className="text-red-200 text-xs font-medium">
+                              ⚠️ Warning: This action cannot be undone. All your data will be permanently deleted.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleClearAllData}
+                          className="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Trash2 size={18} />
+                          Clear All Data
+                        </button>
+                      </div>
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      {...({ webkitdirectory: 'true', directory: 'true' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                      accept=".kml,.jpg,.jpeg"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeSettingsTab === 'preferences' && (
+                <div className="space-y-6 max-w-4xl">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Favorite Colors</h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      Manage your favorite colors for quick access when creating markers or folders.
+                    </p>
+
+                    {/* Add Color Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-6">
+                      <h4 className="text-lg font-medium text-white mb-4">Add Color</h4>
+                      
+                      <div className="space-y-4">
+                        {/* Color Picker */}
+                        <div className="flex items-center gap-4">
+                          <label className="text-sm font-medium text-gray-300">Color Picker:</label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="color"
+                              value={selectedColorPicker}
+                              onChange={(e) => setSelectedColorPicker(e.target.value)}
+                              className="w-16 h-12 rounded-lg cursor-pointer border border-gray-600"
+                            />
+                            <button
+                              onClick={handleAddColorFromPicker}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                            >
+                              Add Color
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Text Input */}
+                        <div className="flex items-center gap-4">
+                          <label className="text-sm font-medium text-gray-300 whitespace-nowrap">Or enter code:</label>
+                          <div className="flex items-center gap-3 flex-1">
+                            <input
+                              type="text"
+                              value={newColorInput}
+                              onChange={(e) => setNewColorInput(e.target.value)}
+                              placeholder="#FF5733 or rgb(255, 87, 51)"
+                              className="flex-1 px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                              onKeyPress={(e) => e.key === 'Enter' && handleAddFavoriteColor()}
+                            />
+                            <button
+                              onClick={handleAddFavoriteColor}
+                              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Favorite Colors List */}
+                    <div className="bg-gray-700/50 rounded-lg p-6">
+                      <h4 className="text-lg font-medium text-white mb-4">
+                        Your Favorite Colors ({favoriteColors.length})
+                      </h4>
+                      
+                      {favoriteColors.length === 0 ? (
+                        <p className="text-gray-400 text-sm">No favorite colors yet. Add some above!</p>
+                      ) : (
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+                          {favoriteColors.map((color, index) => (
+                            <div key={index} className="relative group">
+                              <div
+                                className="w-full aspect-square rounded-lg border-2 border-gray-600 hover:border-gray-400 transition-colors"
+                                style={{ backgroundColor: color }}
+                              />
+                              <button
+                                onClick={() => handleRemoveFavoriteColor(color)}
+                                className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={`Remove ${color}`}
+                              >
+                                ×
+                              </button>
+                              <div className="mt-1 text-xs text-gray-400 truncate text-center">
+                                {color}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -739,6 +1065,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onImportComplete={handleImportComplete}
+      />
+
+      {/* Update Dates Modal */}
+      <UpdateDatesModal
+        isOpen={isUpdateDatesModalOpen}
+        onClose={() => setIsUpdateDatesModalOpen(false)}
+        onUpdateComplete={() => {
+          // Reload data after update
+          console.log('Dates updated successfully');
+        }}
       />
     </>
   );

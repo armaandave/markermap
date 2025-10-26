@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase, convertFolderToSupabase, convertSupabaseToFolder } from '../../../../lib/supabase';
+import { supabaseAdmin, convertFolderToSupabase, convertSupabaseToFolder } from '../../../../lib/supabase';
 import { Folder } from '../../../../lib/db';
 
 // Sync folders to Supabase
@@ -20,16 +20,16 @@ export async function POST(request: Request) {
     console.log('🔄 Supabase Sync: Syncing', folders.length, 'folders for user:', userId);
 
     // Convert folders to Supabase format
-    const supabaseFolders = folders.map((folder: Folder) => ({
+    const supabaseAdminFolders = folders.map((folder: Folder) => ({
       ...convertFolderToSupabase(folder),
       created_at: new Date(folder.createdAt).toISOString(),
       updated_at: new Date(folder.updatedAt).toISOString(),
     }));
 
     // Upsert folders (insert or update)
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('folders')
-      .upsert(supabaseFolders, { onConflict: 'id' });
+      .upsert(supabaseAdminFolders, { onConflict: 'id' });
 
     if (error) {
       console.error('🚨 Supabase Sync: Error syncing folders:', error);
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 
     console.log('🔄 Supabase Sync: Fetching folders for user:', userId);
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('folders')
       .select('*')
       .eq('user_id', userId)
@@ -105,7 +105,7 @@ export async function DELETE(request: Request) {
       // Delete individual folder
       console.log('🗑️ Supabase Delete: Deleting individual folder:', folderId, 'for user:', userId);
       
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('folders')
         .delete()
         .eq('id', folderId)
@@ -122,7 +122,7 @@ export async function DELETE(request: Request) {
       // Delete all folders for user (except default)
       console.log('🗑️ Supabase Delete: Deleting all folders for user:', userId);
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('folders')
         .delete()
         .eq('user_id', userId)
