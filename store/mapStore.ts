@@ -18,6 +18,11 @@ interface MapState {
     longitude: number;
     latitude: number;
     zoom: number;
+    bearing: number;
+    pitch: number;
+    padding?: { top?: number; bottom?: number; left?: number; right?: number };
+    width?: number;
+    height?: number;
   };
   setViewState: (viewState: Partial<MapState['viewState']>) => void;
   
@@ -73,6 +78,8 @@ export const useMapStore = create<MapState>((set, get) => ({
     longitude: -98.5795,
     latitude: 39.8283,
     zoom: 4,
+    bearing: 0,
+    pitch: 0,
   },
   setViewState: (viewState) => set((state) => ({
     viewState: { ...state.viewState, ...viewState }

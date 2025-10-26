@@ -39,8 +39,18 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
   }, [isAddingMarker, onAddMarker]);
 
   const handleViewStateChange = useCallback((evt: { viewState: ViewState }) => {
-    setViewState(evt.viewState);
-  }, [setViewState]);
+    // Only update if the viewState has actually changed to prevent infinite loops
+    const newViewState = evt.viewState;
+    const current = viewState;
+    
+    if (
+      Math.abs(newViewState.longitude - current.longitude) > 0.0001 ||
+      Math.abs(newViewState.latitude - current.latitude) > 0.0001 ||
+      Math.abs(newViewState.zoom - current.zoom) > 0.01
+    ) {
+      setViewState(newViewState);
+    }
+  }, [setViewState, viewState]);
 
   const handleMapLoad = useCallback(() => {
     setMapLoaded(true);
@@ -77,80 +87,59 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           return;
         }
 
-        // Check permission status
+        let shouldTryLocation = false;
+
+        // Check permission status if available
         if ('permissions' in navigator) {
-          const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-          console.log('Geolocation permission status:', permissionResult.state);
-          
-          // Only request location if permission is granted
-          if (permissionResult.state === 'granted') {
-            console.log('Location permission granted, requesting location...');
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                const lng = position.coords.longitude;
-                const lat = position.coords.latitude;
-                
-                console.log('Got user location for initial view:', { lng, lat });
-                
-                // Set the view state to user's location
-                setViewState({
-                  longitude: lng,
-                  latitude: lat,
-                  zoom: 15
-                });
-                
-                setShouldRenderMap(true);
-              },
-              (error) => {
-                console.log('Geolocation failed:', error.message);
-                console.log('Using default center of US location');
-                setShouldRenderMap(true);
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          } else {
-            console.log('Location permission not granted, using default USA view');
-            setShouldRenderMap(true);
+          try {
+            const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+            console.log('Geolocation permission status:', permissionResult.state);
+            // Try to get location if granted or prompt (user hasn't seen prompt yet)
+            shouldTryLocation = permissionResult.state === 'granted' || permissionResult.state === 'prompt';
+          } catch (e) {
+            // If permission API fails, try anyway
+            console.log('Permission API query failed, will attempt geolocation anyway');
+            shouldTryLocation = true;
           }
         } else {
-          // Fallback for browsers without permissions API
-          console.log('Permissions API not supported, trying to get location...');
-          const nav = navigator as Navigator & { geolocation: Geolocation };
-          if (nav.geolocation) {
-            nav.geolocation.getCurrentPosition(
-              (position: GeolocationPosition) => {
-                const lng = position.coords.longitude;
-                const lat = position.coords.latitude;
-                
-                console.log('Got user location for initial view:', { lng, lat });
-                
-                // Set the view state to user's location
-                setViewState({
-                  longitude: lng,
-                  latitude: lat,
-                  zoom: 15
-                });
-                
-                setShouldRenderMap(true);
-              },
-              (error: GeolocationPositionError) => {
-                console.log('Geolocation failed:', error.message);
-                console.log('Using default center of US location');
-                setShouldRenderMap(true);
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          } else {
-            setShouldRenderMap(true);
-          }
+          // No permissions API, try anyway
+          shouldTryLocation = true;
+        }
+
+        if (shouldTryLocation) {
+          console.log('Attempting to get user location for initial view...');
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const lng = position.coords.longitude;
+              const lat = position.coords.latitude;
+              
+              console.log('Got user location for initial view:', { lng, lat });
+              
+              // Set the view state to user's location
+              setViewState({
+                longitude: lng,
+                latitude: lat,
+                zoom: 15,
+                bearing: 0,
+                pitch: 0
+              });
+              
+              setShouldRenderMap(true);
+            },
+            (error) => {
+              console.log('Geolocation failed:', error.message);
+              console.log('Using default center of US location');
+              setShouldRenderMap(true);
+            },
+            {
+              enableHighAccuracy: false, // Use false for faster response on mobile
+              timeout: 8000, // Give more time on mobile
+              maximumAge: 300000 // Allow 5 minute old cached locations for faster response
+            }
+          );
+        } else {
+          console.log('Location permission denied, using default USA view');
+          setShouldRenderMap(true);
         }
       } catch (error) {
         console.log('Error checking location permission:', error);
@@ -272,71 +261,36 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           return;
         }
 
-        // Check permission status
+        const map = mapRef.current?.getMap();
+        if (!map) return;
+
+        let shouldTryLocation = false;
+
+        // Check permission status if available
         if ('permissions' in navigator) {
-          const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-          console.log('Geolocation permission status:', permissionResult.state);
-          
-          // Only show marker if permission is granted
-          if (permissionResult.state === 'granted') {
-            console.log('Location permission granted, adding current location marker...');
-            
-            const map = mapRef.current?.getMap();
-            if (!map) return;
-            
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                const lng = position.coords.longitude;
-                const lat = position.coords.latitude;
-                
-                console.log('Adding current location marker:', { lng, lat });
-                
-                // Create temporary current location marker
-                const locationEl = document.createElement('div');
-                locationEl.style.cssText = `
-                  width: 20px;
-                  height: 20px;
-                  background-color: #007AFF;
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                `;
-                
-                const marker = new mapboxgl.Marker({
-                  element: locationEl,
-                  anchor: 'center'
-                })
-                  .setLngLat([lng, lat])
-                  .addTo(map);
-                
-                setCurrentLocationMarker(marker);
-              },
-              (error) => {
-                console.error('Error getting location for marker:', error);
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          } else {
-            console.log('Location permission not granted, not showing location marker');
+          try {
+            const permissionResult = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+            console.log('Geolocation permission status for marker:', permissionResult.state);
+            // Try to get location if granted or prompt (user hasn't seen prompt yet)
+            shouldTryLocation = permissionResult.state === 'granted' || permissionResult.state === 'prompt';
+          } catch (e) {
+            // If permission API fails, try anyway
+            console.log('Permission API query failed, will attempt geolocation anyway');
+            shouldTryLocation = true;
           }
         } else {
-          // Fallback for browsers without permissions API
-          console.log('Permissions API not supported, trying to add location marker...');
-          const map = mapRef.current?.getMap();
-          if (!map) return;
-          
-          const nav = navigator as Navigator & { geolocation: Geolocation };
-          if (nav.geolocation) {
-            nav.geolocation.getCurrentPosition(
-              (position: GeolocationPosition) => {
+          // No permissions API, try anyway
+          shouldTryLocation = true;
+        }
+
+        if (shouldTryLocation) {
+          console.log('Attempting to get location for current location marker...');
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
               const lng = position.coords.longitude;
               const lat = position.coords.latitude;
               
-              console.log('Adding current location marker (fallback):', { lng, lat });
+              console.log('Adding current location marker:', { lng, lat });
               
               // Create temporary current location marker
               const locationEl = document.createElement('div');
@@ -358,16 +312,18 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
               
               setCurrentLocationMarker(marker);
             },
-            (error: GeolocationPositionError) => {
-              console.error('Error getting location for marker:', error);
+            (error) => {
+              // Silently handle - user can still use the location button
+              console.log('Could not get location for marker (non-critical):', error.code, error.message || 'Permission or timeout');
             },
             {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 0
+              enableHighAccuracy: false, // Use false for faster response on mobile
+              timeout: 8000, // Give more time on mobile
+              maximumAge: 300000 // Allow 5 minute old cached locations for faster response
             }
           );
-          }
+        } else {
+          console.log('Location permission denied, not showing location marker');
         }
       } catch (error) {
         console.log('Error checking location permission for marker:', error);
@@ -544,7 +500,8 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
         <Map
           ref={mapRef}
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-          initialViewState={viewState}
+          // @ts-ignore - viewState type mismatch
+          viewState={viewState}
           onMove={handleViewStateChange}
           onClick={handleMapClick}
           onLoad={handleMapLoad}

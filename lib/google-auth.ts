@@ -74,10 +74,18 @@ export const getGoogleAuthUrl = () => {
   const redirectUri = getGoogleRedirectUri();
   console.log('🔍 Generated Google Auth URL with redirect URI:', redirectUri);
   
+  // Check if we're on a private IP (local development)
+  const isPrivateIp = typeof window !== 'undefined' && 
+    window.location.hostname !== 'localhost' && 
+    window.location.hostname !== '127.0.0.1' &&
+    (window.location.hostname.startsWith('10.') || 
+     window.location.hostname.startsWith('192.168.') || 
+     window.location.hostname.startsWith('172.'));
+  
   const rootUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
-  const options = {
+  const options: Record<string, string> = {
     redirect_uri: redirectUri,
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: GOOGLE_CLIENT_ID!,
     access_type: 'offline',
     response_type: 'code',
     prompt: 'select_account',
@@ -86,7 +94,15 @@ export const getGoogleAuthUrl = () => {
       'https://www.googleapis.com/auth/userinfo.email',
     ].join(' '),
   };
-  const queryString = new URLSearchParams(options as Record<string, string>).toString();
+  
+  // Add device_id and device_name for private IPs (mobile localhost testing)
+  if (isPrivateIp && typeof window !== 'undefined') {
+    options.device_id = 'local-device-' + Math.random().toString(36).substring(7);
+    options.device_name = 'Local Development Device';
+    console.log('🔍 Adding device_id and device_name for private IP access');
+  }
+  
+  const queryString = new URLSearchParams(options).toString();
   const fullUrl = `${rootUrl}?${queryString}`;
   console.log('🔍 Full Google Auth URL:', fullUrl);
   return fullUrl;
