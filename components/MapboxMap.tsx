@@ -14,6 +14,8 @@ interface MapboxMapProps {
 const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
   const mapRef = useRef<MapRef | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const viewStateRef = useRef<any>(null); // Track viewState to avoid recreating callbacks
+  const isProgrammaticMoveRef = useRef(false); // Track if move is programmatic
   const {
     viewState,
     setViewState,
@@ -23,6 +25,11 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     setMapStyle,
     setSelectedMarker,
   } = useMapStore();
+
+  // Update ref when viewState changes
+  useEffect(() => {
+    viewStateRef.current = viewState;
+  }, [viewState]);
 
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -39,18 +46,24 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
   }, [isAddingMarker, onAddMarker]);
 
   const handleViewStateChange = useCallback((evt: { viewState: ViewState }) => {
-    // Only update if the viewState has actually changed to prevent infinite loops
-    const newViewState = evt.viewState;
-    const current = viewState;
+    // Skip updates during programmatic moves to prevent infinite loops
+    if (isProgrammaticMoveRef.current) {
+      return;
+    }
     
-    if (
-      Math.abs(newViewState.longitude - current.longitude) > 0.0001 ||
-      Math.abs(newViewState.latitude - current.latitude) > 0.0001 ||
-      Math.abs(newViewState.zoom - current.zoom) > 0.01
+    // Only update if the viewState has actually changed significantly
+    const newViewState = evt.viewState;
+    const current = viewStateRef.current; // Use ref to avoid dependency
+    
+    // Use larger thresholds to prevent unnecessary updates during smooth animations
+    if (!current || 
+      Math.abs(newViewState.longitude - current.longitude) > 0.001 ||
+      Math.abs(newViewState.latitude - current.latitude) > 0.001 ||
+      Math.abs(newViewState.zoom - current.zoom) > 0.1
     ) {
       setViewState(newViewState);
     }
-  }, [setViewState, viewState]);
+  }, [setViewState]); // No longer depends on viewState, preventing infinite loop
 
   const handleMapLoad = useCallback(() => {
     setMapLoaded(true);
@@ -148,7 +161,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     };
 
     checkLocationPermission();
-  }, [setViewState, shouldRenderMap]);
+  }, [setViewState]); // Removed shouldRenderMap from dependencies to prevent infinite loop
 
   // Create marker element
   const createMarkerElement = useCallback((marker: Marker) => {
@@ -385,13 +398,6 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     }
   }, [markers, folders, mapLoaded, updateMarkers]);
 
-  // Initial marker load when map becomes ready
-  useEffect(() => {
-    if (mapLoaded && markers.length > 0) {
-      updateMarkers();
-    }
-  }, [mapLoaded, updateMarkers]);
-
 
   const handleZoomIn = useCallback(() => {
     if (mapRef.current) {
@@ -456,13 +462,20 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           setCurrentLocationMarker(marker);
         }
         
-        // Fly to location
+        // Fly to location (set flag to prevent state updates during animation)
         console.log('Flying to location');
+        isProgrammaticMoveRef.current = true;
+        
         map.flyTo({
           center: [lng, lat],
           zoom: 15,
           duration: 2000
         });
+        
+        // Clear flag after animation completes
+        setTimeout(() => {
+          isProgrammaticMoveRef.current = false;
+        }, 2100); // Slightly longer than animation duration
       },
       (error) => {
         console.error('Error getting location:', error);
@@ -501,7 +514,7 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
           ref={mapRef}
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
           // @ts-ignore - viewState type mismatch
-          viewState={viewState}
+          initialViewState={viewState}
           onMove={handleViewStateChange}
           onClick={handleMapClick}
           onLoad={handleMapLoad}
