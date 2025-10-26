@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useMapStore } from '../store/mapStore';
-import { Folder, Marker } from '../lib/db';
+import { Folder, Marker, Tag } from '../lib/db';
 import { KMLParser } from '../lib/kml-parser';
 import { db } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
@@ -24,7 +24,8 @@ import {
   LogOut,
   Settings,
   ChevronsLeft,
-  Clock
+  Clock,
+  Tag as TagIcon
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,6 +47,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     setSelectedMarker,
     selectedFolderId,
     setSelectedFolderId,
+    tagVisibility,
+    setTagVisibility: setStoreTagVisibility,
+    filterMode,
+    setFilterMode: setStoreFilterMode,
   } = useMapStore();
 
   const [showAddFolder, setShowAddFolder] = useState(false);
@@ -63,6 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [selectedColorPicker, setSelectedColorPicker] = useState('#000000');
   const [defaultMapStyle, setDefaultMapStyle] = useState('mapbox://styles/mapbox/dark-v11');
   const [isMapStyleDropdownOpen, setIsMapStyleDropdownOpen] = useState(false);
+  const [isFilterModeDropdownOpen, setIsFilterModeDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Import map styles for the dropdown
@@ -404,6 +410,73 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return folders.filter(folder => folder.parentId === parentId);
   };
 
+  // Get all unique tags from markers
+  const getAllTags = (): string[] => {
+    const allTags = new Set<string>();
+    markers.forEach(marker => {
+      marker.tags?.forEach(tag => allTags.add(tag));
+    });
+    return Array.from(allTags).sort();
+  };
+
+  // Initialize all tags as visible when markers change
+  useEffect(() => {
+    const allTags = getAllTags();
+    const newVisibility: Record<string, boolean> = {};
+    allTags.forEach(tag => {
+      // Preserve existing visibility or default to true
+      if (tagVisibility[tag] !== undefined) {
+        newVisibility[tag] = tagVisibility[tag];
+      } else {
+        newVisibility[tag] = true;
+      }
+    });
+    setStoreTagVisibility(newVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markers]); // Only re-run when markers change
+
+  // Toggle folder visibility (all at once)
+  const handleToggleAllFolders = () => {
+    const allVisible = folders.every(folder => folder.visible !== false);
+    const newVisibility = !allVisible;
+    
+    folders.forEach(folder => {
+      updateFolder(folder.id, { visible: newVisibility });
+    });
+  };
+
+  // Toggle tag visibility
+  const handleTagToggle = (tagName: string) => {
+    const newVisibility = {
+      ...tagVisibility,
+      [tagName]: !tagVisibility[tagName],
+    };
+    setStoreTagVisibility(newVisibility);
+  };
+
+  // Toggle all tags visibility
+  const handleToggleAllTags = () => {
+    const allTags = getAllTags();
+    const allCurrentlyVisible = allTags.every(tag => tagVisibility[tag] !== false);
+    const newState = !allCurrentlyVisible;
+    
+    const newVisibility: Record<string, boolean> = {};
+    allTags.forEach(tag => {
+      newVisibility[tag] = newState;
+    });
+    setStoreTagVisibility(newVisibility);
+  };
+
+  // Check if a tag is visible
+  const isTagVisible = (tagName: string): boolean => {
+    return tagVisibility[tagName] !== false;
+  };
+
+  // Get marker count for a tag
+  const getTagMarkerCount = (tagName: string): number => {
+    return markers.filter(marker => marker.tags?.includes(tagName)).length;
+  };
+
   // Load favorite colors from Supabase or localStorage
   useEffect(() => {
     const loadFavoriteColors = async () => {
@@ -466,16 +539,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       if (isMapStyleDropdownOpen && !target.closest('.map-style-dropdown')) {
         setIsMapStyleDropdownOpen(false);
       }
+      if (isFilterModeDropdownOpen && !target.closest('.filter-mode-dropdown')) {
+        setIsFilterModeDropdownOpen(false);
+      }
     };
 
-    if (isMapStyleDropdownOpen) {
+    if (isMapStyleDropdownOpen || isFilterModeDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isMapStyleDropdownOpen]);
+  }, [isMapStyleDropdownOpen, isFilterModeDropdownOpen]);
 
   // Save favorite colors to Supabase or localStorage
   const saveFavoriteColors = async (colors: string[]) => {
@@ -760,52 +836,172 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
 
 
-          {/* Folders Section */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-300">Folders</h3>
-              <button
-                onClick={() => setShowAddFolder(true)}
-                className="p-1 hover:bg-gray-700 rounded"
-              >
-                <Plus size={16} />
-              </button>
+            {/* Filter Mode Selector */}
+            <div className="p-4 border-b border-gray-700">
+              <div className="relative filter-mode-dropdown">
+                <label className="block text-xs font-medium text-gray-400 mb-2">Filter Mode</label>
+                <button
+                  type="button"
+                  onClick={() => setIsFilterModeDropdownOpen(!isFilterModeDropdownOpen)}
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 hover:bg-gray-600 transition-colors flex items-center justify-between"
+                >
+                  <span className="capitalize">{filterMode}</span>
+                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${isFilterModeDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {isFilterModeDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        setStoreFilterMode('folders');
+                        setIsFilterModeDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        filterMode === 'folders'
+                          ? 'bg-blue-600/20 text-blue-300'
+                          : 'text-white hover:bg-gray-600'
+                      }`}
+                    >
+                      Folders Only
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStoreFilterMode('tags');
+                        setIsFilterModeDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        filterMode === 'tags'
+                          ? 'bg-blue-600/20 text-blue-300'
+                          : 'text-white hover:bg-gray-600'
+                      }`}
+                    >
+                      Tags Only
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStoreFilterMode('both');
+                        setIsFilterModeDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        filterMode === 'both'
+                          ? 'bg-blue-600/20 text-blue-300'
+                          : 'text-white hover:bg-gray-600'
+                      }`}
+                    >
+                      Both
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Add Folder Form */}
-            {showAddFolder && (
-              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Folder name"
-                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
-                  autoFocus
-                />
-                <div className="flex gap-2 mt-2">
+            {/* Folders and Tags Section */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Folders Section */}
+            <div className={`p-4 ${filterMode === 'tags' ? 'opacity-40' : ''}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-300">Folders</h3>
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={handleAddFolder}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                    onClick={handleToggleAllFolders}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle all folders visibility"
                   >
-                    Add
+                    {folders.length > 0 && folders.every(f => f.visible !== false) ? (
+                      <Eye size={16} className="text-green-400" />
+                    ) : (
+                      <EyeOff size={16} className="text-gray-400" />
+                    )}
                   </button>
                   <button
-                    onClick={() => {
-                      setShowAddFolder(false);
-                      setNewFolderName('');
-                    }}
-                    className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                    onClick={() => setShowAddFolder(true)}
+                    className="p-1 hover:bg-gray-700 rounded"
                   >
-                    Cancel
+                    <Plus size={16} />
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Folders List */}
-            <div className="space-y-1">
-              {getChildFolders().map(folder => renderFolder(folder))}
+              {/* Add Folder Form */}
+              {showAddFolder && (
+                <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="Folder name"
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleAddFolder}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddFolder(false);
+                        setNewFolderName('');
+                      }}
+                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Folders List */}
+              <div className="space-y-1">
+                {getChildFolders().map(folder => renderFolder(folder))}
+              </div>
+            </div>
+
+            {/* Tags Section */}
+            <div className={`p-4 border-t border-gray-700 ${filterMode === 'folders' ? 'opacity-40' : ''}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-300">Tags</h3>
+                <button
+                  onClick={handleToggleAllTags}
+                  className="p-1 hover:bg-gray-600 rounded"
+                  title="Toggle all tags visibility"
+                >
+                  {getAllTags().length > 0 && getAllTags().every(tag => isTagVisible(tag)) ? (
+                    <Eye size={16} className="text-green-400" />
+                  ) : (
+                    <EyeOff size={16} className="text-gray-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Tags List */}
+              <div className="space-y-1">
+                {getAllTags().map(tagName => (
+                  <div
+                    key={tagName}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <TagIcon size={14} className="text-gray-400" />
+                      <span className="text-sm text-white">{tagName}</span>
+                      <span className="text-xs text-gray-400">({getTagMarkerCount(tagName)})</span>
+                    </div>
+                    <button
+                      onClick={() => handleTagToggle(tagName)}
+                      className="p-1 hover:bg-gray-600 rounded"
+                      title={isTagVisible(tagName) ? 'Show markers with this tag' : 'Hide markers with this tag'}
+                    >
+                      {isTagVisible(tagName) ? (
+                        <Eye size={14} className="text-green-400" />
+                      ) : (
+                        <EyeOff size={14} className="text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

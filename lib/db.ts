@@ -15,6 +15,15 @@ export interface Folder {
   userId?: string; // null for local data, user ID for cloud data
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  visible: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  userId?: string; // null for local data, user ID for cloud data
+}
+
 export interface Marker {
   id: string;
   folderId: string;
@@ -26,6 +35,7 @@ export interface Marker {
   address?: string;
   images?: string[]; // Cloudinary image URLs
   customFields?: Record<string, any>; // Store custom fields from KML
+  tags?: string[]; // Tags for organizing markers
   createdAt: Date;
   updatedAt: Date;
   userId?: string; // null for local data, user ID for cloud data
@@ -58,6 +68,7 @@ export interface MarkerCustomValue {
 export class MarkerMapDB extends Dexie {
   folders!: Table<Folder>;
   markers!: Table<Marker>;
+  tags!: Table<Tag>;
   markerImages!: Table<MarkerImage>;
   customFields!: Table<CustomField>;
   markerCustomValues!: Table<MarkerCustomValue>;
@@ -65,9 +76,10 @@ export class MarkerMapDB extends Dexie {
   constructor() {
     super('MarkerMapDB');
     console.log('🗄️ Database: Creating database schema...');
-    this.version(2).stores({
+    this.version(3).stores({
       folders: 'id, name, visible, order, createdAt, userId',
       markers: 'id, folderId, title, latitude, longitude, createdAt, userId',
+      tags: 'id, name, visible, createdAt, userId',
       markerImages: 'id, markerId, order, createdAt',
       customFields: 'id, name, type, createdAt',
       markerCustomValues: 'id, markerId, fieldId, createdAt'

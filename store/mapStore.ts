@@ -57,6 +57,14 @@ interface MapState {
   setDefaultMapStyle: (style: string) => void;
   loadDefaultMapStyle: () => Promise<void>;
   
+  // Tag visibility state
+  tagVisibility: Record<string, boolean>;
+  setTagVisibility: (visibility: Record<string, boolean>) => void;
+  
+  // Filter mode
+  filterMode: 'folders' | 'tags' | 'both';
+  setFilterMode: (mode: 'folders' | 'tags' | 'both') => void;
+  
   // Import state
   isImporting: boolean;
   setIsImporting: (importing: boolean) => void;
@@ -311,6 +319,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       }
     }
   },
+  
+  // Tag visibility state
+  tagVisibility: {},
+  setTagVisibility: (tagVisibility) => set({ tagVisibility }),
+  
+  // Filter mode
+  filterMode: 'folders',
+  setFilterMode: (filterMode) => set({ filterMode }),
   
   // Import state
   isImporting: false,

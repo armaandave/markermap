@@ -353,7 +353,7 @@ export default function Home() {
         {selectedMarker && (
           <>
             {/* Preview Box - Natural height */}
-            <div ref={previewRef} className="absolute bottom-4 left-4 lg:w-80 bg-gray-800 rounded-lg p-4 shadow-lg z-10 max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <div ref={previewRef} className="absolute bottom-4 left-4 lg:w-80 bg-gray-800 rounded-lg p-4 shadow-lg z-10 max-h-90 overflow-y-auto">
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-white">{selectedMarker.title}</h3>
                 <div className="flex items-center gap-2">
@@ -387,10 +387,23 @@ export default function Home() {
                 <p>Lat: {selectedMarker.latitude.toFixed(6)}</p>
                 <p>Lng: {selectedMarker.longitude.toFixed(6)}</p>
                 <p>Created: {new Date(selectedMarker.createdAt).toLocaleDateString()}</p>
-                {selectedMarker.customFields && Object.keys(selectedMarker.customFields).length > 0 && (
-                  <p className="mt-2 text-blue-300">+ {Object.keys(selectedMarker.customFields).length} custom fields</p>
-                )}
               </div>
+              
+              {/* Tags */}
+              {selectedMarker.tags && selectedMarker.tags.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-700">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMarker.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2 py-1 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded text-xs"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Images - Separate, positioned to match preview height with JS */}
@@ -430,6 +443,7 @@ export default function Home() {
             onClose={() => setIsEditModalOpen(false)}
             onSave={handleSaveMarker}
             folders={folders}
+            allMarkers={markers}
           />
 
           {/* Import Modal */}

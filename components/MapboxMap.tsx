@@ -24,6 +24,8 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     mapStyle,
     setMapStyle,
     setSelectedMarker,
+    tagVisibility,
+    filterMode,
   } = useMapStore();
 
   // Update ref when viewState changes
@@ -361,11 +363,27 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    // Filter visible markers
+    // Filter visible markers based on filter mode
     const visibleMarkers = markers.filter(marker => {
       const folder = folders.find(f => f.id === marker.folderId);
-      if (!folder) return true;
-      return folder.visible !== false;
+      const folderVisible = folder ? folder.visible !== false : true;
+      
+      const hasTags = marker.tags && marker.tags.length > 0;
+      const hasVisibleTag = hasTags && marker.tags!.some(tag => tagVisibility[tag] !== false);
+      
+      if (filterMode === 'folders') {
+        // Folders Only: ignore tags, respect folder visibility
+        return folderVisible;
+      } else if (filterMode === 'tags') {
+        // Tags Only: ignore folders, respect tag visibility
+        if (!hasTags) {
+          return false; // Hide markers without tags in Tags Only mode
+        }
+        return hasVisibleTag; // Show if at least one tag is visible
+      } else {
+        // Both: must satisfy BOTH conditions
+        return folderVisible && (hasVisibleTag || !hasTags);
+      }
     });
 
     console.log('🗺️ MAP - Adding', visibleMarkers.length, 'visible markers');
@@ -389,14 +407,14 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
 
     console.log('🗺️ MAP - Total markers on map:', markersRef.current.length);
 
-  }, [markers, folders, mapLoaded, createMarkerElement]);
+  }, [markers, folders, tagVisibility, filterMode, mapLoaded, createMarkerElement]);
 
-  // Update markers when marker data or folder visibility changes
+  // Update markers when marker data, folder visibility, tag visibility, or filter mode changes
   useEffect(() => {
     if (mapLoaded) {
       updateMarkers();
     }
-  }, [markers, folders, mapLoaded, updateMarkers]);
+  }, [markers, folders, tagVisibility, filterMode, mapLoaded, updateMarkers]);
 
 
   const handleZoomIn = useCallback(() => {

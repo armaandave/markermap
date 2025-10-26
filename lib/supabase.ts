@@ -37,6 +37,7 @@ export interface SupabaseMarker {
   color: string;
   custom_fields?: Record<string, any>;
   images?: string[];
+  tags?: string[];
   created_at: string;
   updated_at: string;
   user_id: string;
@@ -75,6 +76,7 @@ export const convertMarkerToSupabase = (marker: Marker): Omit<SupabaseMarker, 'c
   color: marker.color,
   custom_fields: marker.customFields,
   images: marker.images || [],
+  tags: marker.tags || [],
   user_id: marker.userId || '',
 });
 
@@ -88,6 +90,7 @@ export const convertSupabaseToMarker = (supabaseMarker: SupabaseMarker): Marker 
   color: supabaseMarker.color,
   customFields: supabaseMarker.custom_fields,
   images: supabaseMarker.images || [],
+  tags: supabaseMarker.tags || [],
   createdAt: new Date(supabaseMarker.created_at),
   updatedAt: new Date(supabaseMarker.updated_at),
   userId: supabaseMarker.user_id,

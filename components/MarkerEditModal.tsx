@@ -12,9 +12,10 @@ interface MarkerEditModalProps {
   onClose: () => void;
   onSave: (marker: Marker) => void;
   folders: Folder[];
+  allMarkers?: Marker[];
 }
 
-const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClose, onSave, folders }) => {
+const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClose, onSave, folders, allMarkers = [] }) => {
   const [formData, setFormData] = useState<Marker>({
     id: '',
     folderId: '',
@@ -26,14 +27,20 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
     address: '',
     images: [],
     customFields: {},
+    tags: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   });
 
   const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
+  const [newTag, setNewTag] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [favoriteColors, setFavoriteColors] = useState<string[]>([]);
   const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
   const folderDropdownRef = useRef<HTMLDivElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   // Load favorite colors on mount
   useEffect(() => {
@@ -58,6 +65,7 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
         setFormData({
           ...marker,
           customFields: marker.customFields || {},
+          tags: marker.tags || [],
         });
       });
     }
@@ -125,6 +133,115 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
         [fieldName]: value,
       },
     }));
+  };
+
+  const handleTagAdd = (tag: string) => {
+    if (tag.trim() && !formData.tags?.includes(tag.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...(prev.tags || []), tag.trim()],
+      }));
+    }
+  };
+
+  const handleTagRemove = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags?.filter(tag => tag !== tagToRemove) || [],
+    }));
+  };
+
+  // Get all unique existing tags from all markers
+  const getAllExistingTags = () => {
+    const allTags = new Set<string>();
+    allMarkers.forEach(marker => {
+      marker.tags?.forEach(tag => allTags.add(tag));
+    });
+    return Array.from(allTags);
+  };
+
+  // Update suggestions when typing
+  useEffect(() => {
+    if (newTag.trim()) {
+      const allTags = new Set<string>();
+      allMarkers.forEach(marker => {
+        marker.tags?.forEach(tag => allTags.add(tag));
+      });
+      const existingTags = Array.from(allTags);
+      
+      const filtered = existingTags
+        .filter(tag => 
+          tag.toLowerCase().includes(newTag.toLowerCase()) && 
+          !formData.tags?.includes(tag)
+        )
+        .slice(0, 10); // Limit to 10 suggestions
+      setTagSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setTagSuggestions([]);
+      setShowSuggestions(false);
+    }
+    setSelectedSuggestionIndex(-1);
+  }, [newTag, formData.tags, allMarkers]);
+
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewTag(e.target.value);
+  };
+
+  const handleTagInputKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedSuggestionIndex >= 0 && tagSuggestions[selectedSuggestionIndex]) {
+        // Select from suggestions
+        handleTagAdd(tagSuggestions[selectedSuggestionIndex]);
+        setNewTag('');
+        setShowSuggestions(false);
+      } else if (newTag.trim()) {
+        // Add new tag
+        handleTagAdd(newTag);
+        setNewTag('');
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+      tagInputRef.current?.blur();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => 
+        prev < tagSuggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    handleTagAdd(suggestion);
+    setNewTag('');
+    setShowSuggestions(false);
+  };
+
+  const handleTagInputFocus = () => {
+    if (newTag.trim()) {
+      const existingTags = getAllExistingTags();
+      const filtered = existingTags
+        .filter(tag => 
+          tag.toLowerCase().includes(newTag.toLowerCase()) && 
+          !formData.tags?.includes(tag)
+        )
+        .slice(0, 10);
+      setTagSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    }
+  };
+
+  const handleTagInputBlur = () => {
+    // Delay hiding suggestions to allow clicks on suggestions
+    setTimeout(() => {
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+    }, 200);
   };
 
   const handleImageUploaded = (imageUrl: string) => {
@@ -319,6 +436,65 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
               className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               placeholder="Enter address..."
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Tags
+            </label>
+            <div className="mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.tags?.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-full text-sm"
+                  >
+                    {tag}
+                    <button
+                      onClick={() => handleTagRemove(tag)}
+                      className="text-blue-300 hover:text-blue-200"
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="relative">
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={newTag}
+                  onChange={handleTagInputChange}
+                  onKeyDown={handleTagInputKeyPress}
+                  onFocus={handleTagInputFocus}
+                  onBlur={handleTagInputBlur}
+                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Press Enter to add a tag"
+                />
+                
+                {/* Suggestions Dropdown */}
+                {showSuggestions && tagSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {tagSuggestions.map((suggestion, index) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className={`w-full px-4 py-2 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                          index === selectedSuggestionIndex
+                            ? 'bg-blue-600/20 text-blue-300'
+                            : 'text-white hover:bg-gray-600'
+                        }`}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Custom Fields */}
