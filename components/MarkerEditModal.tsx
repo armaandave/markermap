@@ -151,24 +151,42 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
     }));
   };
 
-  // Get all unique existing tags from all markers
+  // Get all unique existing tags from all markers, sorted by marker count
   const getAllExistingTags = () => {
-    const allTags = new Set<string>();
+    const tagCounts = new Map<string, number>();
+    
+    // Count markers per tag
     allMarkers.forEach(marker => {
-      marker.tags?.forEach(tag => allTags.add(tag));
+      marker.tags?.forEach(tag => {
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+      });
     });
-    return Array.from(allTags);
+    
+    // Sort by count (descending), then alphabetically for ties
+    return Array.from(tagCounts.keys()).sort((a, b) => {
+      const countDiff = tagCounts.get(b)! - tagCounts.get(a)!;
+      return countDiff !== 0 ? countDiff : a.localeCompare(b);
+    });
   };
 
   // Update suggestions when typing
   useEffect(() => {
     if (newTag.trim()) {
-      const allTags = new Set<string>();
+      // Count markers per tag
+      const tagCounts = new Map<string, number>();
       allMarkers.forEach(marker => {
-        marker.tags?.forEach(tag => allTags.add(tag));
+        marker.tags?.forEach(tag => {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        });
       });
-      const existingTags = Array.from(allTags);
       
+      // Get all tags sorted by usage count
+      const existingTags = Array.from(tagCounts.keys()).sort((a, b) => {
+        const countDiff = tagCounts.get(b)! - tagCounts.get(a)!;
+        return countDiff !== 0 ? countDiff : a.localeCompare(b);
+      });
+      
+      // Filter based on input and sort by count (already sorted)
       const filtered = existingTags
         .filter(tag => 
           tag.toLowerCase().includes(newTag.toLowerCase()) && 
@@ -182,6 +200,7 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
       setShowSuggestions(false);
     }
     setSelectedSuggestionIndex(-1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newTag, formData.tags, allMarkers]);
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

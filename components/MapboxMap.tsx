@@ -252,12 +252,10 @@ const MapboxMap: React.FC<MapboxMapProps> = ({ onAddMarker }) => {
       // Use opacity instead of transform to avoid positioning issues
       el.addEventListener('mouseenter', () => {
         el.style.opacity = '0.8';
-        el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
       });
       
       el.addEventListener('mouseleave', () => {
         el.style.opacity = '1';
-        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
       });
       
       return el;

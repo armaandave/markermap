@@ -410,13 +410,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return folders.filter(folder => folder.parentId === parentId);
   };
 
-  // Get all unique tags from markers
+  // Get all unique tags from markers, sorted by marker count (descending)
   const getAllTags = (): string[] => {
-    const allTags = new Set<string>();
+    const tagCounts = new Map<string, number>();
+    
+    // Count markers per tag
     markers.forEach(marker => {
-      marker.tags?.forEach(tag => allTags.add(tag));
+      marker.tags?.forEach(tag => {
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+      });
     });
-    return Array.from(allTags).sort();
+    
+    // Sort by count (descending), then alphabetically for ties
+    return Array.from(tagCounts.keys()).sort((a, b) => {
+      const countDiff = tagCounts.get(b)! - tagCounts.get(a)!;
+      return countDiff !== 0 ? countDiff : a.localeCompare(b);
+    });
   };
 
   // Initialize all tags as visible when markers change
