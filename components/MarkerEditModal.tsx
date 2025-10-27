@@ -416,47 +416,6 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Latitude
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={formData.latitude}
-                onChange={(e) => setFormData(prev => ({ ...prev, latitude: parseFloat(e.target.value) || 0 }))}
-                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Longitude
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={formData.longitude}
-                onChange={(e) => setFormData(prev => ({ ...prev, longitude: parseFloat(e.target.value) || 0 }))}
-                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Address
-            </label>
-            <input
-              type="text"
-              value={formData.address || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              placeholder="Enter address..."
-            />
-          </div>
-
           {/* Tags */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -514,6 +473,47 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Latitude
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={formData.latitude}
+                onChange={(e) => setFormData(prev => ({ ...prev, latitude: parseFloat(e.target.value) || 0 }))}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Longitude
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={formData.longitude}
+                onChange={(e) => setFormData(prev => ({ ...prev, longitude: parseFloat(e.target.value) || 0 }))}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Address
+            </label>
+            <input
+              type="text"
+              value={formData.address || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              placeholder="Enter address..."
+            />
           </div>
 
           {/* Custom Fields */}
