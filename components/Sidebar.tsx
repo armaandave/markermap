@@ -8,6 +8,8 @@ import { db } from '../lib/db';
 import { useAuthContext } from './AuthProvider';
 import ImportModal from './ImportModal';
 import UpdateDatesModal from './UpdateDatesModal';
+import FriendRequestModal from './FriendRequestModal';
+import ShareFolderModal from './ShareFolderModal';
 import { 
   X, 
   Folder as FolderIcon, 
@@ -25,7 +27,12 @@ import {
   Settings,
   ChevronsLeft,
   Clock,
-  Tag as TagIcon
+  Tag as TagIcon,
+  UserPlus,
+  Users,
+  Share2,
+  Lock,
+  Check
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -70,6 +77,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [isMapStyleDropdownOpen, setIsMapStyleDropdownOpen] = useState(false);
   const [isFilterModeDropdownOpen, setIsFilterModeDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Friends and sharing state
+  const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [sharingFolder, setSharingFolder] = useState<Folder | null>(null);
+  const [friendsExpanded, setFriendsExpanded] = useState(false);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [sharedByMe, setSharedByMe] = useState<any[]>([]);
+  
+  // Section collapse states
+  const [foldersExpanded, setFoldersExpanded] = useState(true);
+  const [tagsExpanded, setTagsExpanded] = useState(true);
+  const [sharedByMeExpanded, setSharedByMeExpanded] = useState(true);
+  const [sharedWithMeExpanded, setSharedWithMeExpanded] = useState(true);
+  const [friendRequestsExpanded, setFriendRequestsExpanded] = useState(false);
 
   // Import map styles for the dropdown
   const mapStyles = [
@@ -244,6 +268,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         order: folders.length,
         createdAt: new Date(),
         updatedAt: new Date(),
+        userId: user?.uid || undefined,
       };
       addFolder(newFolder);
       setNewFolderName('');
@@ -404,6 +429,66 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const getMarkerCount = (folderId: string): number => {
     return markers.filter(marker => marker.folderId === folderId).length;
+  };
+
+  // Fetch friends and pending requests
+  const fetchFriends = async () => {
+    if (!user) return;
+    
+    try {
+      const response = await fetch(`/api/friends?userId=${user.uid}&status=accepted`);
+      if (response.ok) {
+        const { friends } = await response.json();
+        setFriends(friends || []);
+      }
+    } catch (error) {
+      console.error('Error fetching friends:', error);
+    }
+  };
+
+  const fetchPendingCount = async () => {
+    if (!user) return;
+    
+    try {
+      const response = await fetch(`/api/friends?userId=${user.uid}&status=pending`);
+      if (response.ok) {
+        const { friends } = await response.json();
+        const incomingRequests = (friends || []).filter((f: any) => f.isIncoming);
+        setPendingCount(incomingRequests.length);
+        setIncomingRequests(incomingRequests);
+      }
+    } catch (error) {
+      console.error('Error fetching pending requests:', error);
+    }
+  };
+
+  // Fetch folders shared by me
+  const fetchSharedByMe = async () => {
+    if (!user) return;
+
+    try {
+      const response = await fetch(`/api/folders/share?userId=${user.uid}&type=shared-by-me`);
+      if (response.ok) {
+        const { shares } = await response.json();
+        setSharedByMe(shares || []);
+      }
+    } catch (error) {
+      console.error('Error fetching shared by me:', error);
+    }
+  };
+
+  // Fetch friends when user is signed in
+  useEffect(() => {
+    if (user) {
+      fetchFriends();
+      fetchPendingCount();
+      fetchSharedByMe();
+    }
+  }, [user]);
+
+  const handleOpenShareModal = (folder: Folder) => {
+    setSharingFolder(folder);
+    setIsShareModalOpen(true);
   };
 
   const getChildFolders = (parentId?: string): Folder[] => {
@@ -714,26 +799,42 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <span className="text-xs text-gray-400">({markerCount})</span>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleFolderEdit(folder);
-              }}
-              className="p-1 hover:bg-gray-600 rounded"
-              title="Edit folder"
-            >
-              <MoreHorizontal size={14} className="text-gray-400" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleFolderDelete(folder.id);
-              }}
-              className="p-1 hover:bg-gray-600 rounded"
-              title={folder.name === 'Default' ? 'Delete all markers in folder' : 'Delete folder'}
-            >
-              <Trash2 size={14} className="text-gray-400 hover:text-red-400" />
-            </button>
+            {user && !folder.isShared && folder.userId === user.uid && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenShareModal(folder);
+                }}
+                className="p-1 hover:bg-gray-600 rounded"
+                title="Share folder"
+              >
+                <Share2 size={14} className="text-blue-400" />
+              </button>
+            )}
+            {!folder.isShared && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFolderEdit(folder);
+                  }}
+                  className="p-1 hover:bg-gray-600 rounded"
+                  title="Edit folder"
+                >
+                  <MoreHorizontal size={14} className="text-gray-400" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFolderDelete(folder.id);
+                  }}
+                  className="p-1 hover:bg-gray-600 rounded"
+                  title={folder.name === 'Default' ? 'Delete all markers in folder' : 'Delete folder'}
+                >
+                  <Trash2 size={14} className="text-gray-400 hover:text-red-400" />
+                </button>
+              </>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -757,6 +858,56 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  const renderSharedFolder = (folder: Folder) => {
+    const markerCount = getMarkerCount(folder.id);
+    const isSelected = selectedFolderId === folder.id;
+
+    return (
+      <div
+        key={folder.id}
+        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+          isSelected 
+            ? 'bg-blue-600/20 border border-blue-500/30' 
+            : 'hover:bg-gray-700/50'
+        }`}
+        onClick={() => handleFolderSelect(folder.id)}
+      >
+        <div className="flex items-center gap-2 flex-1">
+          <FolderIcon size={16} style={{ color: folder.color }} />
+          <span className={`text-sm font-medium ${isSelected ? 'text-blue-300' : ''}`}>
+            {folder.name}
+          </span>
+          {folder.ownerName && (
+            <span className="text-xs text-gray-500">
+              by {folder.ownerName}
+            </span>
+          )}
+          <span className="text-xs text-gray-400">({markerCount})</span>
+          {folder.sharePermission === 'view' && (
+            <div title="View only">
+              <Lock size={12} className="text-yellow-400" />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleFolderToggle(folder.id);
+            }}
+            className="p-1 hover:bg-gray-600 rounded"
+          >
+            {folder.visible ? (
+              <Eye size={14} className="text-green-400" />
+            ) : (
+              <EyeOff size={14} className="text-gray-400" />
+            )}
+          </button>
+        </div>
       </div>
     );
   };
@@ -906,10 +1057,168 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
             {/* Folders and Tags Section */}
           <div className="flex-1 overflow-y-auto">
-            {/* Folders Section */}
+            {/* Friends Section - Only show if user is signed in */}
+            {user && (
+              <div className={`p-4 border-b border-gray-700 ${filterMode === 'tags' ? 'opacity-40' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <Users size={16} />
+                    Friends
+                    {pendingCount > 0 && (
+                      <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setIsFriendModalOpen(true)}
+                      className="p-1 hover:bg-gray-600 rounded"
+                      title="Add friends"
+                    >
+                      <Plus size={16} />
+                    </button>
+                    <button
+                      onClick={() => setFriendsExpanded(!friendsExpanded)}
+                      className="p-1 hover:bg-gray-600 rounded"
+                      title="Toggle friends list"
+                    >
+                      {friendsExpanded ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                {friendsExpanded && (
+                  <div className="space-y-2">
+                    {/* Friend Requests Section */}
+                    {incomingRequests.length > 0 && (
+                      <div>
+                        <button
+                          onClick={() => setFriendRequestsExpanded(!friendRequestsExpanded)}
+                          className="flex items-center justify-between w-full p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                        >
+                          <span className="text-xs font-medium text-gray-400 uppercase">Friend Requests ({incomingRequests.length})</span>
+                          {friendRequestsExpanded ? (
+                            <ChevronDown size={14} className="text-gray-400" />
+                          ) : (
+                            <ChevronRight size={14} className="text-gray-400" />
+                          )}
+                        </button>
+                        {friendRequestsExpanded && (
+                          <div className="space-y-1 ml-2">
+                            {incomingRequests.map((request: any) => {
+                              const requester = request.friend || { user_id: '', email: '', display_name: 'User' };
+                              return (
+                                <div
+                                  key={request.id}
+                                  className="flex items-center justify-between p-2 rounded-lg bg-gray-700/30"
+                                >
+                                  <div className="flex items-center gap-2 flex-1">
+                                    {requester.profile_picture_url ? (
+                                      <img
+                                        src={requester.profile_picture_url}
+                                        alt={requester.display_name || requester.email}
+                                        className="w-6 h-6 rounded-full"
+                                      />
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs">
+                                        {(requester.display_name || requester.email || 'U')[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="text-sm font-medium text-gray-300">
+                                      {requester.display_name || requester.email || 'User'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => {
+                                        fetch('/api/friends', {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ friendshipId: request.id, userId: user.uid, status: 'accepted' }),
+                                        }).then(() => {
+                                          fetchPendingCount();
+                                          fetchFriends();
+                                        });
+                                      }}
+                                      className="p-1 hover:bg-green-600/20 rounded"
+                                      title="Accept request"
+                                    >
+                                      <Check size={14} className="text-green-400" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        fetch(`/api/friends?id=${request.id}`, { method: 'DELETE' }).then(() => {
+                                          fetchPendingCount();
+                                        });
+                                      }}
+                                      className="p-1 hover:bg-red-600/20 rounded"
+                                      title="Decline request"
+                                    >
+                                      <X size={14} className="text-red-400" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Your Friends Section */}
+                    {friends.length > 0 ? (
+                      <div className="space-y-1">
+                        {friends.map((friendship: any) => {
+                          const friend = friendship.friend || { user_id: '', email: '', display_name: 'Friend' };
+                          return (
+                            <div
+                              key={friendship.id}
+                              className="flex items-center justify-between p-2 rounded-lg cursor-pointer hover:bg-gray-700/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                {friend.profile_picture_url ? (
+                                  <img
+                                    src={friend.profile_picture_url}
+                                    alt={friend.display_name || friend.email}
+                                    className="w-6 h-6 rounded-full"
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs">
+                                    {(friend.display_name || friend.email || 'F')[0].toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="text-sm font-medium text-gray-300">
+                                  {friend.display_name || friend.email || 'Friend'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setIsFriendModalOpen(true)}
+                        className="w-full flex items-center justify-center gap-2 p-2 text-sm text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
+                      >
+                        <UserPlus size={16} />
+                        Add Friends
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* My Folders Section */}
             <div className={`p-4 ${filterMode === 'tags' ? 'opacity-40' : ''}`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-gray-300">Folders</h3>
+                <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <FolderIcon size={16} />
+                  Folders
+                </h3>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={handleToggleAllFolders}
@@ -924,97 +1233,251 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   </button>
                   <button
                     onClick={() => setShowAddFolder(true)}
-                    className="p-1 hover:bg-gray-700 rounded"
+                    className="p-1 hover:bg-gray-600 rounded"
                   >
                     <Plus size={16} />
                   </button>
+                  <button
+                    onClick={() => setFoldersExpanded(!foldersExpanded)}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle folders list"
+                  >
+                    {foldersExpanded ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronRight size={16} />
+                    )}
+                  </button>
                 </div>
               </div>
+              
+              {foldersExpanded && (
+                <>
+                  {/* Add Folder Form */}
+                  {showAddFolder && (
+                    <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                      <input
+                        type="text"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="Folder name"
+                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={handleAddFolder}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowAddFolder(false);
+                            setNewFolderName('');
+                          }}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-              {/* Add Folder Form */}
-              {showAddFolder && (
-                <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="Folder name"
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
-                    autoFocus
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={handleAddFolder}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
-                    >
-                      Add
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddFolder(false);
-                        setNewFolderName('');
-                      }}
-                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
-                    >
-                      Cancel
-                    </button>
+                  {/* Folders List */}
+                  <div className="space-y-1">
+                    {getChildFolders()
+                      .filter(f => !f.isShared)
+                      .map(folder => renderFolder(folder))}
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Folders List */}
-              <div className="space-y-1">
-                {getChildFolders().map(folder => renderFolder(folder))}
-              </div>
             </div>
+
+            {/* Shared By Me Section - Only show if user is signed in */}
+            {user && sharedByMe.length > 0 && (
+              <div className={`p-4 border-t border-gray-700 ${filterMode === 'tags' ? 'opacity-40' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <Share2 size={16} />
+                    Shared By Me
+                  </h3>
+                  <button
+                    onClick={() => setSharedByMeExpanded(!sharedByMeExpanded)}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle shared by me list"
+                  >
+                    {sharedByMeExpanded ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronRight size={16} />
+                    )}
+                  </button>
+                </div>
+                {sharedByMeExpanded && (
+                  <div className="space-y-2">
+                    {sharedByMe.map((share) => {
+                      const folder = folders.find(f => f.id === share.folder_id);
+                      const sharedWith = share.sharedWith || { user_id: share.shared_with_id, display_name: '', email: '' };
+                      
+                      return folder ? (
+                        <div
+                          key={share.id}
+                          className="p-2 bg-gray-800 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <FolderIcon size={14} style={{ color: folder.color }} />
+                            <span className="text-sm text-white font-medium">{folder.name}</span>
+                            <span className="text-xs text-gray-400">({getMarkerCount(folder.id)})</span>
+                          </div>
+                          <div className="ml-6 flex items-center gap-2 text-xs text-gray-400">
+                            <span>with</span>
+                            <div className="flex items-center gap-1">
+                              {sharedWith.profile_picture_url ? (
+                                <img
+                                  src={sharedWith.profile_picture_url}
+                                  alt={sharedWith.display_name || sharedWith.email}
+                                  className="w-5 h-5 rounded-full"
+                                />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px]">
+                                  {(sharedWith.display_name || sharedWith.email || 'U')[0].toUpperCase()}
+                                </div>
+                              )}
+                              <span>{sharedWith.display_name || sharedWith.email || 'User'}</span>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                              share.permission === 'edit' ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'
+                            }`}>
+                              {share.permission === 'edit' ? 'Can Edit' : 'View Only'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Shared Folders Section - Only show if user is signed in */}
+            {user && folders.filter(f => f.isShared).length > 0 && (
+              <div className={`p-4 border-t border-gray-700 ${filterMode === 'tags' ? 'opacity-40' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <Share2 size={16} />
+                    Shared With Me
+                  </h3>
+                  <button
+                    onClick={() => setSharedWithMeExpanded(!sharedWithMeExpanded)}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle shared with me list"
+                  >
+                    {sharedWithMeExpanded ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronRight size={16} />
+                    )}
+                  </button>
+                </div>
+                {sharedWithMeExpanded && (
+                <div className="space-y-1">
+                  {folders
+                    .filter(f => f.isShared)
+                    .map(folder => renderSharedFolder(folder))}
+                </div>
+                )}
+              </div>
+            )}
 
             {/* Tags Section */}
             <div className={`p-4 border-t border-gray-700 ${filterMode === 'folders' ? 'opacity-40' : ''}`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-gray-300">Tags</h3>
-                <button
-                  onClick={handleToggleAllTags}
-                  className="p-1 hover:bg-gray-600 rounded"
-                  title="Toggle all tags visibility"
-                >
-                  {getAllTags().length > 0 && getAllTags().every(tag => isTagVisible(tag)) ? (
-                    <Eye size={16} className="text-green-400" />
-                  ) : (
-                    <EyeOff size={16} className="text-gray-400" />
-                  )}
-                </button>
+                <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <TagIcon size={16} />
+                  Tags
+                </h3>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleToggleAllTags}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle all tags visibility"
+                  >
+                    {getAllTags().length > 0 && getAllTags().every(tag => isTagVisible(tag)) ? (
+                      <Eye size={16} className="text-green-400" />
+                    ) : (
+                      <EyeOff size={16} className="text-gray-400" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setTagsExpanded(!tagsExpanded)}
+                    className="p-1 hover:bg-gray-600 rounded"
+                    title="Toggle tags list"
+                  >
+                    {tagsExpanded ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronRight size={16} />
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {/* Tags List */}
-              <div className="space-y-1">
-                {getAllTags().map(tagName => (
-                  <div
-                    key={tagName}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 flex-1">
-                      <TagIcon size={14} className="text-gray-400" />
-                      <span className="text-sm text-white">{tagName}</span>
-                      <span className="text-xs text-gray-400">({getTagMarkerCount(tagName)})</span>
-                    </div>
-                    <button
-                      onClick={() => handleTagToggle(tagName)}
-                      className="p-1 hover:bg-gray-600 rounded"
-                      title={isTagVisible(tagName) ? 'Show markers with this tag' : 'Hide markers with this tag'}
-                    >
-                      {isTagVisible(tagName) ? (
-                        <Eye size={14} className="text-green-400" />
-                      ) : (
-                        <EyeOff size={14} className="text-gray-400" />
-                      )}
-                    </button>
+              {tagsExpanded && (
+                <>
+                  {/* Tags List */}
+                  <div className="space-y-1">
+                    {getAllTags().map(tagName => (
+                      <div
+                        key={tagName}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          <TagIcon size={14} className="text-gray-400" />
+                          <span className="text-sm text-white">{tagName}</span>
+                          <span className="text-xs text-gray-400">({getTagMarkerCount(tagName)})</span>
+                        </div>
+                        <button
+                          onClick={() => handleTagToggle(tagName)}
+                          className="p-1 hover:bg-gray-600 rounded"
+                          title={isTagVisible(tagName) ? 'Show markers with this tag' : 'Hide markers with this tag'}
+                        >
+                          {isTagVisible(tagName) ? (
+                            <Eye size={14} className="text-green-400" />
+                          ) : (
+                            <EyeOff size={14} className="text-gray-400" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Render modals */}
+      <FriendRequestModal
+          isOpen={isFriendModalOpen}
+          onClose={() => {
+            setIsFriendModalOpen(false);
+            fetchFriends();
+            fetchPendingCount();
+          }}
+          userId={user?.uid}
+        />
+
+        <ShareFolderModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            fetchSharedByMe();
+          }}
+          folder={sharingFolder}
+          userId={user?.uid}
+        />
 
       {/* Folder Edit Modal */}
       {editingFolder && (
@@ -1072,6 +1535,319 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
       )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg w-[95vw] h-[90vh] max-w-7xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
+              <h2 className="text-2xl font-semibold text-white">Settings</h2>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-1 px-6 pt-4 border-b border-gray-700 flex-shrink-0">
+              <button
+                onClick={() => setActiveSettingsTab('preferences')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeSettingsTab === 'preferences'
+                    ? 'text-blue-400 border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Preferences
+              </button>
+              <button
+                onClick={() => setActiveSettingsTab('imports')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeSettingsTab === 'imports'
+                    ? 'text-blue-400 border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Imports
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeSettingsTab === 'imports' && (
+                <div className="space-y-6 max-w-4xl">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Import Data</h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      Import markers, folders, and images from KML files. Your data can be imported from Google Maps exports or custom KML files.
+                    </p>
+
+                    {/* Import KML with Images Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Import KML with Images</h4>
+                          <p className="text-sm text-gray-400">
+                            Select a folder containing your KML file and images. Images will be uploaded to Cloudinary and linked to markers.
+                          </p>
+                          <div className="mt-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                            <p className="text-blue-200 text-xs font-medium mb-2">Expected folder structure:</p>
+                            <div className="text-blue-100 text-xs font-mono space-y-1">
+                              <div>📁 Your Folder/</div>
+                              <div className="ml-4">📄 data.kml</div>
+                              <div className="ml-4">🖼️ image1.jpg</div>
+                              <div className="ml-4">🖼️ image2.jpg</div>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsImportModalOpen(true)}
+                          className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Upload size={18} />
+                          Import KML with Images
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Update Dates Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Update Dates from KML</h4>
+                          <p className="text-sm text-gray-400">
+                            Update creation dates for existing markers based on your original KML file.
+                          </p>
+                          <div className="mt-3 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                            <p className="text-purple-200 text-xs">
+                              This tool will match markers by coordinates and update their creation dates from your original KML file.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsUpdateDatesModalOpen(true)}
+                          className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Clock size={18} />
+                          Update Dates
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cleanup Orphaned Images Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-white mb-2">Cleanup Orphaned Images</h4>
+                          <p className="text-sm text-gray-400">
+                            Remove unused images from Cloudinary that are no longer referenced by any markers.
+                          </p>
+                          <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                            <p className="text-yellow-200 text-xs">
+                              This will scan your Cloudinary account and delete images that aren&apos;t being used by any markers.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleCleanupOrphanedImages}
+                          className="flex items-center gap-2 px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Trash2 size={18} />
+                          Cleanup Images
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Clear All Data Section */}
+                    <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-red-400 mb-2">Clear All Data</h4>
+                          <p className="text-sm text-gray-400">
+                            Permanently delete all markers, folders, and associated images from your account.
+                          </p>
+                          <div className="mt-3 p-3 bg-red-800/30 border border-red-500/30 rounded-lg">
+                            <p className="text-red-200 text-xs font-medium">
+                              ⚠️ Warning: This action cannot be undone. All your data will be permanently deleted.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleClearAllData}
+                          className="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <Trash2 size={18} />
+                          Clear All Data
+                        </button>
+                      </div>
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      {...({ webkitdirectory: 'true', directory: 'true' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                      accept=".kml,.jpg,.jpeg"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeSettingsTab === 'preferences' && (
+                <div className="space-y-6 max-w-4xl">
+                  {/* Default Map Type - Only show if user is logged in */}
+                  {user && (
+                    <div>
+                      <h3 className="text-xl font-semibold text-white mb-2">Default Map Type</h3>
+                      <p className="text-sm text-gray-400 mb-4">
+                        Choose your preferred map style that will be used when you open the app.
+                      </p>
+                      <div className="bg-gray-700/50 rounded-lg p-4">
+                        <div className="relative map-style-dropdown">
+                          <button
+                            onClick={() => setIsMapStyleDropdownOpen(!isMapStyleDropdownOpen)}
+                            className="bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm border border-gray-600 hover:border-gray-500 transition-colors flex items-center gap-2 w-full"
+                          >
+                            <span>{mapStyles.find(s => s.id === defaultMapStyle)?.name || 'Dark'}</span>
+                            <ChevronDown size={14} className={`transition-transform ml-auto ${isMapStyleDropdownOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {isMapStyleDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-1 bg-black/90 backdrop-blur-sm rounded-lg border border-gray-600 shadow-lg z-50 w-full min-w-full max-w-[200px]">
+                              {mapStyles.map((style) => (
+                                <button
+                                  key={style.id}
+                                  onClick={() => {
+                                    handleSaveDefaultMapStyle(style.id);
+                                    setIsMapStyleDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg whitespace-nowrap ${
+                                    defaultMapStyle === style.id ? 'bg-blue-600/20 text-blue-300' : 'text-white'
+                                  }`}
+                                >
+                                  {style.name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Favorite Colors</h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      Manage your favorite colors for quick access when creating markers or folders.
+                    </p>
+
+                    {/* Add Color Section */}
+                    <div className="bg-gray-700/50 rounded-lg p-6 mb-6">
+                      <h4 className="text-lg font-medium text-white mb-4">Add Color</h4>
+                      
+                      <div className="space-y-4">
+                        {/* Color Picker */}
+                        <div className="flex items-center gap-4">
+                          <label className="text-sm font-medium text-gray-300">Color Picker:</label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="color"
+                              value={selectedColorPicker}
+                              onChange={(e) => setSelectedColorPicker(e.target.value)}
+                              className="w-16 h-12 rounded-lg cursor-pointer border border-gray-600"
+                            />
+                            <button
+                              onClick={handleAddColorFromPicker}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                            >
+                              Add Color
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Text Input */}
+                        <div className="flex items-center gap-4">
+                          <label className="text-sm font-medium text-gray-300 whitespace-nowrap">Or enter code:</label>
+                          <div className="flex items-center gap-3 flex-1">
+                            <input
+                              type="text"
+                              value={newColorInput}
+                              onChange={(e) => setNewColorInput(e.target.value)}
+                              placeholder="#FF5733 or rgb(255, 87, 51)"
+                              className="flex-1 px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                              onKeyPress={(e) => e.key === 'Enter' && handleAddFavoriteColor()}
+                            />
+                            <button
+                              onClick={handleAddFavoriteColor}
+                              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Favorite Colors List */}
+                    <div className="bg-gray-700/50 rounded-lg p-6">
+                      <h4 className="text-lg font-medium text-white mb-4">
+                        Your Favorite Colors ({favoriteColors.length})
+                      </h4>
+                      
+                      {favoriteColors.length === 0 ? (
+                        <p className="text-gray-400 text-sm">No favorite colors yet. Add some above!</p>
+                      ) : (
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+                          {favoriteColors.map((color, index) => (
+                            <div key={index} className="relative group">
+                              <div
+                                className="w-full aspect-square rounded-lg border-2 border-gray-600 hover:border-gray-400 transition-colors"
+                                style={{ backgroundColor: color }}
+                              />
+                              <button
+                                onClick={() => handleRemoveFavoriteColor(color)}
+                                className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={`Remove ${color}`}
+                              >
+                                ×
+                              </button>
+                              <div className="mt-1 text-xs text-gray-400 truncate text-center">
+                                {color}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportComplete={handleImportComplete}
+      />
+
+      {/* Update Dates Modal */}
+      <UpdateDatesModal
+        isOpen={isUpdateDatesModalOpen}
+        onClose={() => setIsUpdateDatesModalOpen(false)}
+        onUpdateComplete={() => {
+          // Reload data after update
+          console.log('Dates updated successfully');
+        }}
+      />
 
       {/* Settings Modal */}
       {showSettingsModal && (

@@ -28,6 +28,20 @@ export const useAuth = () => {
           console.log('🔐 useAuth: Parsed user data:', userData);
           console.log('🔐 useAuth: Found stored user:', userData.email, 'UID:', userData.uid);
           setUser(userData);
+          
+          // Create or update user profile in Supabase (silently)
+          fetch('/api/users/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: userData.uid,
+              email: userData.email,
+              displayName: userData.displayName,
+              profilePictureUrl: userData.photoURL,
+            }),
+          }).catch(error => {
+            console.warn('⚠️ useAuth: Failed to sync user profile:', error);
+          });
         } else {
           console.log('🔐 useAuth: No stored user found in localStorage');
         }

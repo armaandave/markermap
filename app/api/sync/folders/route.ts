@@ -17,10 +17,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    console.log('🔄 Supabase Sync: Syncing', folders.length, 'folders for user:', userId);
+    console.log('🔄 Supabase Sync: Syncing folders for user:', userId);
+
+    // Filter to only folders owned by this user (not shared folders)
+    const userOwnedFolders = folders.filter((folder: Folder) => 
+      folder.userId === userId && !folder.isShared
+    );
+    console.log(`🔄 Found ${folders.length} total folders, ${userOwnedFolders.length} owned by user`);
 
     // Convert folders to Supabase format
-    const supabaseAdminFolders = folders.map((folder: Folder) => ({
+    const supabaseAdminFolders = userOwnedFolders.map((folder: Folder) => ({
       ...convertFolderToSupabase(folder),
       created_at: new Date(folder.createdAt).toISOString(),
       updated_at: new Date(folder.updatedAt).toISOString(),
@@ -62,22 +68,73 @@ export async function GET(request: Request) {
 
     console.log('🔄 Supabase Sync: Fetching folders for user:', userId);
 
-    const { data, error } = await supabaseAdmin
+    // Fetch user's own folders
+    const { data: ownFolders, error: ownFoldersError } = await supabaseAdmin
       .from('folders')
       .select('*')
       .eq('user_id', userId)
       .order('order', { ascending: true });
 
-    if (error) {
-      console.error('🚨 Supabase Sync: Error fetching folders:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (ownFoldersError) {
+      console.error('🚨 Supabase Sync: Error fetching own folders:', ownFoldersError);
+      return NextResponse.json({ error: ownFoldersError.message }, { status: 500 });
     }
 
-    // Convert back to local format
-    const folders = data?.map(convertSupabaseToFolder) || [];
-    console.log('✅ Supabase Sync: Fetched', folders.length, 'folders');
+    // Fetch folders shared with this user
+    const { data: folderShares } = await supabaseAdmin
+      .from('folder_shares')
+      .select('*')
+      .eq('shared_with_id', userId);
 
-    return NextResponse.json({ folders });
+    const sharedFolderIds = folderShares?.map(s => s.folder_id) || [];
+    let sharedFolders: any[] = [];
+
+    if (sharedFolderIds.length > 0) {
+      const { data: sharedFoldersData } = await supabaseAdmin
+        .from('folders')
+        .select('*')
+        .in('id', sharedFolderIds)
+        .order('order', { ascending: true });
+
+      sharedFolders = sharedFoldersData || [];
+    }
+
+    // Fetch owner details for shared folders
+    const ownerIds = [...new Set(folderShares?.map(s => s.owner_id) || [])];
+    let ownerDetails: any[] = [];
+    
+    if (ownerIds.length > 0) {
+      const { data: owners } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .in('user_id', ownerIds);
+      
+      ownerDetails = owners || [];
+    }
+
+    // Convert owned folders to local format
+    const convertedOwnFolders = ownFolders?.map(convertSupabaseToFolder) || [];
+    
+    // Convert shared folders to local format and add metadata
+    const convertedSharedFolders = sharedFolders.map(folder => {
+      const share = folderShares?.find(s => s.folder_id === folder.id);
+      const owner = ownerDetails.find(o => o.user_id === share?.owner_id);
+      
+      return {
+        ...convertSupabaseToFolder(folder),
+        isShared: true,
+        ownerId: share?.owner_id,
+        ownerName: owner?.display_name || owner?.email || share?.owner_id.substring(0, 8),
+        sharePermission: share?.permission || 'view',
+      };
+    });
+
+    // Combine owned and shared folders
+    const allFolders = [...convertedOwnFolders, ...convertedSharedFolders];
+    
+    console.log('✅ Supabase Sync: Fetched', allFolders.length, 'folders (', convertedOwnFolders.length, 'owned,', convertedSharedFolders.length, 'shared)');
+
+    return NextResponse.json({ folders: allFolders });
   } catch (error) {
     console.error('🚨 Supabase Sync: Unexpected error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

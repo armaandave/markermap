@@ -17,44 +17,66 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    console.log('🔄 Supabase Sync: Syncing', markers.length, 'markers for user:', userId);
+    console.log('🔄 Supabase Sync: Syncing markers for user:', userId);
 
-    // First, delete all existing markers for this user
-    console.log('🔄 Supabase Sync: Deleting existing markers for user:', userId);
-    const { error: deleteError } = await supabaseAdmin
-      .from('markers')
-      .delete()
-      .eq('user_id', userId);
+    // Filter to only markers owned by this user
+    const userOwnedMarkers = markers.filter((marker: Marker) => marker.userId === userId);
+    console.log(`🔄 Found ${markers.length} total markers, ${userOwnedMarkers.length} owned by user`);
 
-    if (deleteError) {
-      console.error('🚨 Supabase Sync: Error deleting existing markers:', deleteError);
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
-    }
-
-    // Then insert the new markers (if any)
-    if (markers.length > 0) {
-      console.log('🔄 Supabase Sync: Inserting', markers.length, 'new markers');
-      
+    if (userOwnedMarkers.length > 0) {
       // Convert markers to Supabase format
-      const supabaseAdminMarkers = markers.map((marker: Marker) => ({
+      const supabaseAdminMarkers = userOwnedMarkers.map((marker: Marker) => ({
         ...convertMarkerToSupabase(marker),
         created_at: new Date(marker.createdAt).toISOString(),
         updated_at: new Date(marker.updatedAt).toISOString(),
       }));
 
-      // Insert new markers
+      // Use upsert instead of delete + insert to avoid constraint violations
+      console.log('🔄 Supabase Sync: Upserting', userOwnedMarkers.length, 'markers');
       const { error } = await supabaseAdmin
         .from('markers')
-        .insert(supabaseAdminMarkers);
+        .upsert(supabaseAdminMarkers, { onConflict: 'id' });
 
       if (error) {
-        console.error('🚨 Supabase Sync: Error inserting markers:', error);
+        console.error('🚨 Supabase Sync: Error upserting markers:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      console.log('✅ Supabase Sync: Successfully inserted markers');
+      // Now delete markers that should be removed (markers for this user that aren't in the list)
+      const markerIds = new Set(userOwnedMarkers.map((m: Marker) => m.id));
+      const { data: existingMarkers } = await supabaseAdmin
+        .from('markers')
+        .select('id')
+        .eq('user_id', userId);
+
+      const markersToDelete = (existingMarkers || [])
+        .filter((m: { id: string }) => !markerIds.has(m.id))
+        .map((m: { id: string }) => m.id);
+
+      if (markersToDelete.length > 0) {
+        console.log('🔄 Supabase Sync: Deleting', markersToDelete.length, 'orphaned markers');
+        const { error: deleteError } = await supabaseAdmin
+          .from('markers')
+          .delete()
+          .in('id', markersToDelete);
+
+        if (deleteError) {
+          console.error('🚨 Supabase Sync: Error deleting orphaned markers:', deleteError);
+        }
+      }
+
+      console.log('✅ Supabase Sync: Successfully synced markers');
     } else {
-      console.log('✅ Supabase Sync: No markers to insert (all deleted)');
+      // If no markers, delete all markers for this user
+      console.log('🔄 Supabase Sync: No markers, deleting all for user');
+      const { error } = await supabaseAdmin
+        .from('markers')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('🚨 Supabase Sync: Error deleting all markers:', error);
+      }
     }
 
     return NextResponse.json({ success: true });
@@ -82,20 +104,54 @@ export async function GET(request: Request) {
 
     console.log('🔄 Supabase Sync: Fetching markers for user:', userId);
 
-    const { data, error } = await supabaseAdmin
-      .from('markers')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    // Fetch user's own folders to get their folder IDs
+    const { data: userFolders } = await supabaseAdmin
+      .from('folders')
+      .select('id')
+      .eq('user_id', userId);
 
-    if (error) {
-      console.error('🚨 Supabase Sync: Error fetching markers:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const userFolderIds = userFolders?.map(f => f.id) || [];
+
+    // Fetch shared folders for this user
+    const { data: sharedFolders } = await supabaseAdmin
+      .from('folder_shares')
+      .select('folder_id')
+      .eq('shared_with_id', userId);
+
+    const sharedFolderIds = (sharedFolders || []).map(s => s.folder_id);
+    const allFolderIds = [...userFolderIds, ...sharedFolderIds];
+
+    console.log('📁 Found', userFolderIds.length, 'own folders and', sharedFolderIds.length, 'shared folders');
+
+    // Fetch markers in all folders (own + shared)
+    let ownMarkers: any[] = [];
+    let sharedMarkers: any[] = [];
+
+    if (userFolderIds.length > 0) {
+      const { data: ownMarkersData } = await supabaseAdmin
+        .from('markers')
+        .select('*')
+        .in('folder_id', userFolderIds)
+        .order('created_at', { ascending: true });
+
+      ownMarkers = ownMarkersData || [];
     }
 
-    // Convert back to local format
-    const markers = data?.map(convertSupabaseToMarker) || [];
-    console.log('✅ Supabase Sync: Fetched', markers.length, 'markers');
+    if (sharedFolderIds.length > 0) {
+      const { data: sharedMarkersData } = await supabaseAdmin
+        .from('markers')
+        .select('*')
+        .in('folder_id', sharedFolderIds)
+        .order('created_at', { ascending: true });
+
+      sharedMarkers = sharedMarkersData || [];
+    }
+
+    // Combine and convert to local format
+    const allMarkers = [...ownMarkers, ...sharedMarkers];
+    const markers = allMarkers.map(convertSupabaseToMarker);
+    
+    console.log('✅ Supabase Sync: Fetched', markers.length, 'markers (', ownMarkers.length, 'own,', sharedMarkers.length, 'shared)');
 
     return NextResponse.json({ markers });
   } catch (error) {

@@ -54,6 +54,29 @@ function AuthCallbackContent() {
             photoURL: userInfo.picture,
           };
 
+          // Create or update user profile in Supabase
+          try {
+            const profileResponse = await fetch('/api/users/profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: authUser.uid,
+                email: authUser.email,
+                displayName: authUser.displayName,
+                profilePictureUrl: authUser.photoURL,
+              }),
+            });
+            
+            if (profileResponse.ok) {
+              console.log('✅ Auth Callback: User profile created/updated in Supabase');
+            } else {
+              console.warn('⚠️ Auth Callback: Failed to create user profile, continuing anyway');
+            }
+          } catch (profileError) {
+            console.error('⚠️ Auth Callback: Error creating user profile:', profileError);
+            // Continue even if profile creation fails
+          }
+
           // Store in localStorage for persistence across sessions
           localStorage.setItem('authUser', JSON.stringify(authUser));
           if (tokenData.access_token) {

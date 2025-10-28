@@ -13,6 +13,10 @@ export interface Folder {
   createdAt: Date;
   updatedAt: Date;
   userId?: string; // null for local data, user ID for cloud data
+  isShared?: boolean; // true if this folder is shared with current user
+  ownerId?: string; // user who owns this folder (for shared folders)
+  ownerName?: string; // display name of the owner (for shared folders)
+  sharePermission?: 'view' | 'edit'; // permission level for shared folders
 }
 
 export interface Tag {
@@ -63,6 +67,35 @@ export interface MarkerCustomValue {
   fieldId: string;
   value: string | number | boolean | null; // JSON value
   createdAt: Date;
+}
+
+export interface Friendship {
+  id: string;
+  userId: string;
+  friendId: string;
+  status: 'pending' | 'accepted' | 'blocked';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FolderShare {
+  id: string;
+  folderId: string;
+  ownerId: string;
+  sharedWithId: string;
+  permission: 'view' | 'edit';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface User {
+  userId: string;
+  username?: string;
+  displayName?: string;
+  email: string;
+  profilePictureUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export class MarkerMapDB extends Dexie {
