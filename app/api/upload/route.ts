@@ -9,6 +9,11 @@ cloudinary.config({
   secure: true,
 });
 
+// Set configuration for this route
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -16,6 +21,18 @@ export async function POST(request: Request) {
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
+    }
+
+    // Check file size based on environment
+    // In development (localhost), allow up to 100MB. In production, limit to 4.5MB (Vercel restriction)
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const maxSize = isDevelopment ? 100 * 1024 * 1024 : 4.5 * 1024 * 1024;
+    const maxSizeMB = maxSize / 1024 / 1024;
+    
+    if (file.size > maxSize) {
+      return NextResponse.json({ 
+        error: `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is ${maxSizeMB}MB.` 
+      }, { status: 413 });
     }
 
     // Convert file to a buffer
@@ -44,6 +61,14 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('API route error:', error);
+    
+    // Return more specific error messages
+    if (error && typeof error === 'object' && 'message' in error) {
+      return NextResponse.json({ 
+        error: error.message || 'Failed to upload image.' 
+      }, { status: 500 });
+    }
+    
     return NextResponse.json({ error: 'Failed to upload image.' }, { status: 500 });
   }
 }

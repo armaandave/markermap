@@ -29,8 +29,13 @@ export default function ImageUpload({
       return false;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      alert('Image size must be less than 10MB.');
+    // Check if we're on localhost (no size limit) or production (4.5MB limit for Vercel)
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const maxSize = isLocalhost ? 100 * 1024 * 1024 : 4.5 * 1024 * 1024; // 100MB for localhost, 4.5MB for production
+    
+    if (file.size > maxSize) {
+      const maxSizeMB = maxSize / 1024 / 1024;
+      alert(`Image size must be less than ${maxSizeMB}MB (current file: ${(file.size / 1024 / 1024).toFixed(2)}MB).`);
       return false;
     }
 
@@ -46,7 +51,22 @@ export default function ImageUpload({
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        // Get the actual error message from the response
+        let errorMessage = 'Upload failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not JSON, use status-specific messages
+          if (response.status === 413) {
+            const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            const maxSize = isLocalhost ? '100MB' : '4.5MB';
+            errorMessage = `File "${file.name}" is too large. Maximum size is ${maxSize}.`;
+          } else {
+            errorMessage = `Upload failed with status ${response.status}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const { imageUrl } = await response.json();
@@ -54,7 +74,8 @@ export default function ImageUpload({
       return true;
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Failed to upload ${file.name}. Please try again.`);
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      alert(`Failed to upload ${file.name}: ${errorMessage}`);
       return false;
     } finally {
       setUploadingCount(prev => prev - 1);
@@ -204,7 +225,10 @@ export default function ImageUpload({
                     </button>
                   </p>
                   <p className="text-xs text-gray-400">
-                    {maxImages !== undefined ? `Max ${maxImages} images, ` : ''}10MB each. You can select multiple at once.
+                    {maxImages !== undefined ? `Max ${maxImages} images, ` : ''}
+                    {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+                      ? '100MB' 
+                      : '4.5MB'} each. You can select multiple at once.
                   </p>
                 </>
               )}
