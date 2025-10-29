@@ -18,6 +18,7 @@ interface FolderShare {
   owner_id: string;
   shared_with_id: string;
   permission: 'view' | 'edit';
+  share_tags?: boolean;
   created_at: string;
   folder?: Folder;
   owner?: User;
@@ -35,6 +36,7 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [selectedPermission, setSelectedPermission] = useState<'view' | 'edit'>('view');
+  const [shareTags, setShareTags] = useState<boolean>(true);
   const [existingShares, setExistingShares] = useState<FolderShare[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [friends, setFriends] = useState<any[]>([]);
@@ -86,6 +88,7 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
       setSearchQuery('');
       setSearchResults([]);
       setSelectedPermission('view');
+      setShareTags(true);
     }
   }, [isOpen]);
 
@@ -157,6 +160,7 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
           userId,
           sharedWithId,
           permission: selectedPermission,
+          shareTags,
         }),
       });
 
@@ -244,6 +248,30 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
                 Can Edit
               </button>
             </div>
+          </div>
+
+          {/* Share Tags Toggle */}
+          <div>
+            <label className="flex items-center justify-between p-3 rounded-lg border-2 border-gray-600 bg-gray-700 cursor-pointer hover:border-gray-500 transition-colors">
+              <span className="text-sm font-medium text-gray-300">
+                Share Tags
+              </span>
+              <button
+                onClick={() => setShareTags(!shareTags)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  shareTags ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    shareTags ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </label>
+            <p className="text-xs text-gray-400 mt-1 ml-3">
+              {shareTags ? 'Markers will be shared with their tags' : 'Markers will be shared without tags'}
+            </p>
           </div>
 
           {/* Your Friends - Quick Access */}
@@ -392,7 +420,7 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
                         )}
                         <div>
                           <p className="text-white font-medium">{sharedUser?.display_name || 'User'}</p>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="text-xs px-2 py-0.5 bg-gray-600 rounded text-gray-300">
                               {share.permission === 'edit' ? (
                                 <span className="flex items-center gap-1">
@@ -404,6 +432,11 @@ const ShareFolderModal: React.FC<ShareFolderModalProps> = ({ isOpen, onClose, fo
                                 </span>
                               )}
                             </span>
+                            {share.share_tags !== false && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-600/30 rounded text-blue-300">
+                                Tags Shared
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

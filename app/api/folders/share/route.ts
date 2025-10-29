@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 // Share a folder with another user
 export async function POST(request: Request) {
   try {
-    const { folderId, userId, sharedWithId, permission } = await request.json();
+    const { folderId, userId, sharedWithId, permission, shareTags = true } = await request.json();
 
     if (!folderId || !userId || !sharedWithId || !permission) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
       // Update existing share
       const { error: updateError } = await supabaseAdmin
         .from('folder_shares')
-        .update({ permission })
+        .update({ permission, share_tags: shareTags })
         .eq('id', existing.id);
 
       if (updateError) {
@@ -171,6 +171,7 @@ export async function POST(request: Request) {
         owner_id: userId,
         shared_with_id: sharedWithId,
         permission,
+        share_tags: shareTags,
       });
 
     if (error) {

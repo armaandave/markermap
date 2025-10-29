@@ -212,6 +212,21 @@ export default function Home() {
     const targetFolderId = selectedFolderId || folders[0]?.id || '';
     const targetFolder = folders.find(f => f.id === targetFolderId);
     
+    // Check if user has permission to add markers to this folder
+    if (targetFolder?.isShared && targetFolder?.sharePermission === 'view') {
+      // User is viewing a shared folder with view-only permission
+      if (targetFolder?.ownerId !== user?.uid) {
+        alert('You have view-only access to this folder. You cannot add or modify markers in shared folders with view-only permission.');
+        return;
+      }
+    }
+    
+    // Also check if the folder is owned by the user
+    if (targetFolder && targetFolder.userId !== user?.uid && !targetFolder.isShared) {
+      alert('You cannot add markers to this folder.');
+      return;
+    }
+    
     const newMarker: Marker = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2),
       folderId: targetFolderId,
@@ -231,6 +246,24 @@ export default function Home() {
   };
 
   const handleSaveMarker = (updatedMarker: Marker) => {
+    // Check permissions before saving
+    const markerFolder = folders.find(f => f.id === updatedMarker.folderId);
+    
+    // Check if user has permission to modify markers in this folder
+    if (markerFolder?.isShared && markerFolder?.sharePermission === 'view') {
+      // User is viewing a shared folder with view-only permission
+      if (markerFolder?.ownerId !== user?.uid) {
+        alert('You have view-only access to this folder. You cannot add or modify markers in shared folders with view-only permission.');
+        return;
+      }
+    }
+    
+    // Also check if the marker belongs to the user or if they can edit it
+    if (markerFolder && markerFolder.userId !== user?.uid && !markerFolder.isShared) {
+      alert('You cannot modify markers in this folder.');
+      return;
+    }
+    
     updateMarker(updatedMarker.id, updatedMarker);
     setSelectedMarker(updatedMarker);
   };
@@ -238,6 +271,24 @@ export default function Home() {
 
   const handleDeleteMarker = async () => {
     if (selectedMarker) {
+      // Check permissions before deleting
+      const markerFolder = folders.find(f => f.id === selectedMarker.folderId);
+      
+      // Check if user has permission to delete markers from this folder
+      if (markerFolder?.isShared && markerFolder?.sharePermission === 'view') {
+        // User is viewing a shared folder with view-only permission
+        if (markerFolder?.ownerId !== user?.uid) {
+          alert('You have view-only access to this folder. You cannot delete markers in shared folders with view-only permission.');
+          return;
+        }
+      }
+      
+      // Also check if the marker belongs to the user or if they can edit it
+      if (markerFolder && markerFolder.userId !== user?.uid && !markerFolder.isShared) {
+        alert('You cannot delete markers from this folder.');
+        return;
+      }
+      
       // Delete associated Cloudinary images first
       if (selectedMarker.images && selectedMarker.images.length > 0) {
         console.log(`🗑️ Deleting ${selectedMarker.images.length} images for marker: ${selectedMarker.title}`);

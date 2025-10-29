@@ -32,7 +32,8 @@ import {
   Users,
   Share2,
   Lock,
-  Check
+  Check,
+  Search
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -94,6 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [sharedByMeExpanded, setSharedByMeExpanded] = useState(true);
   const [sharedWithMeExpanded, setSharedWithMeExpanded] = useState(true);
   const [friendRequestsExpanded, setFriendRequestsExpanded] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
 
   // Import map styles for the dropdown
   const mapStyles = [
@@ -513,6 +515,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     });
   };
 
+  // Get filtered tags based on search query
+  const getFilteredTags = (): string[] => {
+    const allTags = getAllTags();
+    if (!tagSearchQuery.trim()) {
+      return allTags;
+    }
+    const query = tagSearchQuery.toLowerCase();
+    return allTags.filter(tag => tag.toLowerCase().includes(query));
+  };
+
   // Initialize all tags as visible when markers change
   useEffect(() => {
     const allTags = getAllTags();
@@ -550,12 +562,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   // Toggle all tags visibility
   const handleToggleAllTags = () => {
-    const allTags = getAllTags();
-    const allCurrentlyVisible = allTags.every(tag => tagVisibility[tag] !== false);
+    const tagsToToggle = getFilteredTags();
+    const allCurrentlyVisible = tagsToToggle.every(tag => tagVisibility[tag] !== false);
     const newState = !allCurrentlyVisible;
     
     const newVisibility: Record<string, boolean> = {};
-    allTags.forEach(tag => {
+    tagsToToggle.forEach(tag => {
       newVisibility[tag] = newState;
     });
     setStoreTagVisibility(newVisibility);
@@ -1063,7 +1075,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                     <Users size={16} />
-                    Friends
+                    Friends ({friends.length})
                     {pendingCount > 0 && (
                       <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
                         {pendingCount}
@@ -1217,7 +1229,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                   <FolderIcon size={16} />
-                  Folders
+                  Folders ({getChildFolders().filter(f => !f.isShared).length})
                 </h3>
                 <div className="flex items-center gap-1">
                   <button
@@ -1300,7 +1312,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                     <Share2 size={16} />
-                    Shared By Me
+                    Shared By Me ({sharedByMe.length})
                   </h3>
                   <button
                     onClick={() => setSharedByMeExpanded(!sharedByMeExpanded)}
@@ -1366,7 +1378,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                     <Share2 size={16} />
-                    Shared With Me
+                    Shared With Me ({folders.filter(f => f.isShared).length})
                   </h3>
                   <button
                     onClick={() => setSharedWithMeExpanded(!sharedWithMeExpanded)}
@@ -1395,7 +1407,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                   <TagIcon size={16} />
-                  Tags
+                  Tags ({getAllTags().length})
                 </h3>
                 <div className="flex items-center gap-1">
                   <button
@@ -1403,7 +1415,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     className="p-1 hover:bg-gray-600 rounded"
                     title="Toggle all tags visibility"
                   >
-                    {getAllTags().length > 0 && getAllTags().every(tag => isTagVisible(tag)) ? (
+                    {getFilteredTags().length > 0 && getFilteredTags().every(tag => isTagVisible(tag)) ? (
                       <Eye size={16} className="text-green-400" />
                     ) : (
                       <EyeOff size={16} className="text-gray-400" />
@@ -1425,9 +1437,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
               {tagsExpanded && (
                 <>
+                  {/* Tag Search */}
+                  <div className="mb-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                      <input
+                        type="text"
+                        value={tagSearchQuery}
+                        onChange={(e) => setTagSearchQuery(e.target.value)}
+                        placeholder="Search tags..."
+                        className="w-full pl-9 pr-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
                   {/* Tags List */}
                   <div className="space-y-1">
-                    {getAllTags().map(tagName => (
+                    {getFilteredTags().map(tagName => (
                       <div
                         key={tagName}
                         className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"

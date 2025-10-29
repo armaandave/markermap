@@ -84,6 +84,7 @@ export interface FolderShare {
   ownerId: string;
   sharedWithId: string;
   permission: 'view' | 'edit';
+  shareTags?: boolean; // Whether to share tags with markers
   createdAt: Date;
   updatedAt: Date;
 }

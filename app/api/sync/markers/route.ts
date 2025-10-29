@@ -20,8 +20,47 @@ export async function POST(request: Request) {
     console.log('🔄 Supabase Sync: Syncing markers for user:', userId);
 
     // Filter to only markers owned by this user
-    const userOwnedMarkers = markers.filter((marker: Marker) => marker.userId === userId);
+    let userOwnedMarkers = markers.filter((marker: Marker) => marker.userId === userId);
     console.log(`🔄 Found ${markers.length} total markers, ${userOwnedMarkers.length} owned by user`);
+
+    // Get folder permissions to prevent syncing markers to view-only shared folders
+    const folderIds = new Set(userOwnedMarkers.map((m: Marker) => m.folderId));
+    if (folderIds.size > 0) {
+      const { data: userFolders } = await supabaseAdmin
+        .from('folders')
+        .select('id, user_id')
+        .in('id', Array.from(folderIds))
+        .eq('user_id', userId);
+
+      const userFolderIds = new Set(userFolders?.map(f => f.id) || []);
+
+      // Get shared folders with edit permission
+      const { data: sharedFolders } = await supabaseAdmin
+        .from('folder_shares')
+        .select('folder_id')
+        .eq('shared_with_id', userId)
+        .eq('permission', 'edit');
+
+      const sharedEditFolderIds = new Set(sharedFolders?.map(s => s.folder_id) || []);
+
+      // Filter out markers in folders where user doesn't have edit permission
+      const allowedMarkers = userOwnedMarkers.filter((marker: Marker) => {
+        // Allow if folder is owned by user
+        if (userFolderIds.has(marker.folderId)) return true;
+        // Allow if folder is shared with edit permission
+        if (sharedEditFolderIds.has(marker.folderId)) return true;
+        // Reject otherwise (view-only or no permission)
+        console.warn(`🚨 Blocking marker ${marker.id} - user doesn't have edit permission for folder ${marker.folderId}`);
+        return false;
+      });
+
+      if (allowedMarkers.length < userOwnedMarkers.length) {
+        console.warn(`🚨 Blocked ${userOwnedMarkers.length - allowedMarkers.length} markers due to insufficient permissions`);
+      }
+
+      // Use filtered markers
+      userOwnedMarkers = allowedMarkers;
+    }
 
     if (userOwnedMarkers.length > 0) {
       // Convert markers to Supabase format
@@ -115,10 +154,11 @@ export async function GET(request: Request) {
     // Fetch shared folders for this user
     const { data: sharedFolders } = await supabaseAdmin
       .from('folder_shares')
-      .select('folder_id')
+      .select('folder_id, share_tags')
       .eq('shared_with_id', userId);
 
     const sharedFolderIds = (sharedFolders || []).map(s => s.folder_id);
+    const folderShareMap = new Map((sharedFolders || []).map(s => [s.folder_id, s.share_tags !== false]));
     const allFolderIds = [...userFolderIds, ...sharedFolderIds];
 
     console.log('📁 Found', userFolderIds.length, 'own folders and', sharedFolderIds.length, 'shared folders');
@@ -149,7 +189,17 @@ export async function GET(request: Request) {
 
     // Combine and convert to local format
     const allMarkers = [...ownMarkers, ...sharedMarkers];
-    const markers = allMarkers.map(convertSupabaseToMarker);
+    const markers = allMarkers.map(marker => {
+      const converted = convertSupabaseToMarker(marker);
+      // If this is a shared marker and share_tags is false, remove tags
+      if (sharedFolderIds.includes(marker.folder_id) && folderShareMap.has(marker.folder_id)) {
+        const shouldShareTags = folderShareMap.get(marker.folder_id);
+        if (!shouldShareTags) {
+          converted.tags = undefined;
+        }
+      }
+      return converted;
+    });
     
     console.log('✅ Supabase Sync: Fetched', markers.length, 'markers (', ownMarkers.length, 'own,', sharedMarkers.length, 'shared)');
 
