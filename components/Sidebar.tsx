@@ -18,6 +18,7 @@ import {
   Eye, 
   EyeOff,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   MoreHorizontal,
   Save,
@@ -92,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Section collapse states
   const [foldersExpanded, setFoldersExpanded] = useState(true);
   const [tagsExpanded, setTagsExpanded] = useState(true);
-  const [sharedByMeExpanded, setSharedByMeExpanded] = useState(true);
+  const [sharedByMeExpanded, setSharedByMeExpanded] = useState(false);
   const [sharedWithMeExpanded, setSharedWithMeExpanded] = useState(true);
   const [friendRequestsExpanded, setFriendRequestsExpanded] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState('');
@@ -593,8 +594,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           if (response.ok) {
             const { favoriteColors, defaultMapStyle } = await response.json();
             setFavoriteColors(favoriteColors || []);
+            localStorage.setItem('favoriteColors', JSON.stringify(favoriteColors || []));
             if (defaultMapStyle) {
               setDefaultMapStyle(defaultMapStyle);
+              localStorage.setItem('defaultMapStyle', defaultMapStyle);
             }
             console.log('✅ Loaded preferences from Supabase:', { favoriteColors, defaultMapStyle });
           } else {
@@ -769,6 +772,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Remove a favorite color
   const handleRemoveFavoriteColor = async (color: string) => {
     await saveFavoriteColors(favoriteColors.filter(c => c !== color));
+  };
+
+  // Reorder favorite colors
+  const handleMoveFavoriteColor = async (index: number, direction: 'earlier' | 'later') => {
+    const targetIndex = direction === 'earlier' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= favoriteColors.length) return;
+
+    const reordered = [...favoriteColors];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    await saveFavoriteColors(reordered);
   };
 
   const renderFolder = (folder: Folder, level: number = 0) => {
@@ -1547,6 +1560,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => setEditFolderColor(e.target.value)}
                   className="w-full p-1 bg-gray-700 border border-gray-600 rounded-lg h-12"
                 />
+                {favoriteColors.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-2">Favorite colors:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {favoriteColors.map((color, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setEditFolderColor(color)}
+                          className="w-6 h-6 rounded-sm border-2 transition-all hover:scale-110 cursor-pointer"
+                          style={{
+                            backgroundColor: color,
+                            borderColor: editFolderColor === color ? '#3b82f6' : '#4b5563',
+                          }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -1842,6 +1875,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                                 className="w-full aspect-square rounded-lg border-2 border-gray-600 hover:border-gray-400 transition-colors"
                                 style={{ backgroundColor: color }}
                               />
+                              <div className="mt-2 flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleMoveFavoriteColor(index, 'earlier')}
+                                  disabled={index === 0}
+                                  className="p-1 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  title={`Move ${color} earlier`}
+                                >
+                                  <ChevronLeft size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveFavoriteColor(index, 'later')}
+                                  disabled={index === favoriteColors.length - 1}
+                                  className="p-1 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  title={`Move ${color} later`}
+                                >
+                                  <ChevronRight size={12} />
+                                </button>
+                              </div>
                               <button
                                 onClick={() => handleRemoveFavoriteColor(color)}
                                 className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
@@ -2155,6 +2206,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                                 className="w-full aspect-square rounded-lg border-2 border-gray-600 hover:border-gray-400 transition-colors"
                                 style={{ backgroundColor: color }}
                               />
+                              <div className="mt-2 flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleMoveFavoriteColor(index, 'earlier')}
+                                  disabled={index === 0}
+                                  className="p-1 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  title={`Move ${color} earlier`}
+                                >
+                                  <ChevronLeft size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveFavoriteColor(index, 'later')}
+                                  disabled={index === favoriteColors.length - 1}
+                                  className="p-1 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  title={`Move ${color} later`}
+                                >
+                                  <ChevronRight size={12} />
+                                </button>
+                              </div>
                               <button
                                 onClick={() => handleRemoveFavoriteColor(color)}
                                 className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"

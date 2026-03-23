@@ -5,6 +5,7 @@ import { Marker, Folder } from '../lib/db';
 import { X, Save, Plus, Trash2, ChevronDown } from 'lucide-react';
 import ImageUpload from './ImageUpload';
 import { deleteCloudinaryImages } from '../lib/cloudinary-utils';
+import { useAuthContext } from './AuthProvider';
 
 interface MarkerEditModalProps {
   marker: Marker | null;
@@ -16,6 +17,7 @@ interface MarkerEditModalProps {
 }
 
 const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClose, onSave, folders, allMarkers = [] }) => {
+  const { user } = useAuthContext();
   const [formData, setFormData] = useState<Marker>({
     id: '',
     folderId: '',
@@ -42,9 +44,26 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
   const folderDropdownRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  // Load favorite colors on mount
+  // Load favorite colors whenever the modal opens so it stays in sync with settings.
   useEffect(() => {
-    const loadFavoriteColors = () => {
+    if (!isOpen) return;
+
+    const loadFavoriteColors = async () => {
+      if (user) {
+        try {
+          const response = await fetch(`/api/preferences?userId=${user.uid}`);
+          if (response.ok) {
+            const { favoriteColors: serverFavoriteColors } = await response.json();
+            const colors = Array.isArray(serverFavoriteColors) ? serverFavoriteColors : [];
+            setFavoriteColors(colors);
+            localStorage.setItem('favoriteColors', JSON.stringify(colors));
+            return;
+          }
+        } catch {
+          // Fall through to localStorage fallback.
+        }
+      }
+
       const saved = localStorage.getItem('favoriteColors');
       if (saved) {
         try {
@@ -52,10 +71,13 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
         } catch {
           setFavoriteColors([]);
         }
+      } else {
+        setFavoriteColors([]);
       }
     };
+
     loadFavoriteColors();
-  }, []);
+  }, [isOpen, user]);
 
   // Sync form data when marker prop changes
   useEffect(() => {
@@ -200,7 +222,6 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
       setShowSuggestions(false);
     }
     setSelectedSuggestionIndex(-1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newTag, formData.tags, allMarkers]);
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -339,8 +360,9 @@ const MarkerEditModal: React.FC<MarkerEditModalProps> = ({ marker, isOpen, onClo
                     {favoriteColors.map((color, index) => (
                       <button
                         key={index}
+                        type="button"
                         onClick={() => handleColorSelect(color)}
-                        className="w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 cursor-pointer"
+                        className="w-6 h-6 rounded-sm border-2 transition-all hover:scale-110 cursor-pointer"
                         style={{ 
                           backgroundColor: color,
                           borderColor: formData.color === color ? '#3b82f6' : '#4b5563'
