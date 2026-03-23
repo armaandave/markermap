@@ -209,7 +209,8 @@ export default function Home() {
   // which save with the correct userId context. No bulk save needed.
 
   const handleAddMarker = async (lngLat: { lng: number; lat: number }) => {
-    const targetFolderId = selectedFolderId || folders[0]?.id || '';
+    const firstEligibleFolder = folders.find(folder => !folder.isShared || folder.sharePermission === 'edit');
+    const targetFolderId = selectedFolderId || firstEligibleFolder?.id || '';
     const targetFolder = folders.find(f => f.id === targetFolderId);
     
     // Check if user has permission to add markers to this folder
@@ -271,8 +272,18 @@ export default function Home() {
 
   const handleDeleteMarker = async () => {
     if (selectedMarker) {
+      const markerToDelete = selectedMarker;
+
+      const confirmationMessage = markerToDelete.images && markerToDelete.images.length > 0
+        ? `Delete "${markerToDelete.title}" and ${markerToDelete.images.length} associated image(s)? This action cannot be undone.`
+        : `Delete "${markerToDelete.title}"? This action cannot be undone.`;
+
+      if (!confirm(confirmationMessage)) {
+        return;
+      }
+
       // Check permissions before deleting
-      const markerFolder = folders.find(f => f.id === selectedMarker.folderId);
+      const markerFolder = folders.find(f => f.id === markerToDelete.folderId);
       
       // Check if user has permission to delete markers from this folder
       if (markerFolder?.isShared && markerFolder?.sharePermission === 'view') {
@@ -290,10 +301,10 @@ export default function Home() {
       }
       
       // Delete associated Cloudinary images first
-      if (selectedMarker.images && selectedMarker.images.length > 0) {
-        console.log(`🗑️ Deleting ${selectedMarker.images.length} images for marker: ${selectedMarker.title}`);
+      if (markerToDelete.images && markerToDelete.images.length > 0) {
+        console.log(`🗑️ Deleting ${markerToDelete.images.length} images for marker: ${markerToDelete.title}`);
         
-        const deletionResult = await deleteCloudinaryImages(selectedMarker.images);
+        const deletionResult = await deleteCloudinaryImages(markerToDelete.images);
         
         if (deletionResult.success) {
           console.log(`✅ Successfully deleted ${deletionResult.deleted} images from Cloudinary`);
@@ -307,7 +318,7 @@ export default function Home() {
       }
 
       // Delete the marker from the database
-      deleteMarker(selectedMarker.id);
+      deleteMarker(markerToDelete.id);
       setSelectedMarker(null);
     }
   };

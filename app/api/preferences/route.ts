@@ -7,7 +7,11 @@ export async function GET(request: Request) {
     // Check if Supabase is properly configured
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.warn('🚨 Supabase not configured, returning empty preferences');
-      return NextResponse.json({ favoriteColors: [] });
+      return NextResponse.json({
+        favoriteColors: [],
+        defaultMapStyle: 'mapbox://styles/mapbox/dark-v11',
+        defaultFolderId: null,
+      });
     }
 
     const { searchParams } = new URL(request.url);
@@ -32,9 +36,10 @@ export async function GET(request: Request) {
 
     const favoriteColors = data?.favorite_colors || [];
     const defaultMapStyle = data?.default_map_style || 'mapbox://styles/mapbox/dark-v11';
-    console.log('✅ Preferences: Fetched', favoriteColors.length, 'favorite colors, map style:', defaultMapStyle);
+    const defaultFolderId = data?.default_folder_id || null;
+    console.log('✅ Preferences: Fetched', favoriteColors.length, 'favorite colors, map style:', defaultMapStyle, 'default folder:', defaultFolderId);
 
-    return NextResponse.json({ favoriteColors, defaultMapStyle });
+    return NextResponse.json({ favoriteColors, defaultMapStyle, defaultFolderId });
   } catch (error) {
     console.error('🚨 Preferences: Unexpected error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -50,22 +55,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
     }
 
-    const { favoriteColors, defaultMapStyle, userId } = await request.json();
+    const {
+      favoriteColors,
+      defaultMapStyle,
+      defaultFolderId,
+      userId,
+    } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    console.log('🔄 Preferences: Saving', favoriteColors.length, 'favorite colors for user:', userId);
-    console.log('🔄 Preferences: Default map style:', defaultMapStyle);
-    console.log('🔄 Preferences: Data:', JSON.stringify({ favoriteColors, defaultMapStyle, userId }));
+    const normalizedFavoriteColors = Array.isArray(favoriteColors) ? favoriteColors : [];
+    const normalizedDefaultMapStyle = defaultMapStyle || 'mapbox://styles/mapbox/dark-v11';
+    const normalizedDefaultFolderId = typeof defaultFolderId === 'string' && defaultFolderId.trim() ? defaultFolderId : null;
+
+    console.log('🔄 Preferences: Saving', normalizedFavoriteColors.length, 'favorite colors for user:', userId);
+    console.log('🔄 Preferences: Default map style:', normalizedDefaultMapStyle);
+    console.log('🔄 Preferences: Default folder:', normalizedDefaultFolderId);
+    console.log('🔄 Preferences: Data:', JSON.stringify({ favoriteColors: normalizedFavoriteColors, defaultMapStyle: normalizedDefaultMapStyle, defaultFolderId: normalizedDefaultFolderId, userId }));
 
     // Try to update first
     const { data: updateData, error: updateError } = await supabase
       .from('preferences')
       .update({ 
-        favorite_colors: favoriteColors,
-        default_map_style: defaultMapStyle || 'mapbox://styles/mapbox/dark-v11',
+        favorite_colors: normalizedFavoriteColors,
+        default_map_style: normalizedDefaultMapStyle,
+        default_folder_id: normalizedDefaultFolderId,
         updated_at: new Date().toISOString()
       })
       .eq('user_id', userId)
@@ -80,8 +96,9 @@ export async function POST(request: Request) {
         .from('preferences')
         .insert({
           user_id: userId,
-          favorite_colors: favoriteColors,
-          default_map_style: defaultMapStyle || 'mapbox://styles/mapbox/dark-v11',
+          favorite_colors: normalizedFavoriteColors,
+          default_map_style: normalizedDefaultMapStyle,
+          default_folder_id: normalizedDefaultFolderId,
         })
         .select();
 
@@ -102,4 +119,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

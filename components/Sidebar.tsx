@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMapStore } from '../store/mapStore';
 import { Folder, Marker, Tag } from '../lib/db';
 import { KMLParser } from '../lib/kml-parser';
@@ -32,6 +32,7 @@ import {
   UserPlus,
   Users,
   Share2,
+  Star,
   Lock,
   Check,
   Search
@@ -76,9 +77,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [newColorInput, setNewColorInput] = useState('');
   const [selectedColorPicker, setSelectedColorPicker] = useState('#000000');
   const [defaultMapStyle, setDefaultMapStyle] = useState('mapbox://styles/mapbox/dark-v11');
+  const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
+  const [hasLoadedFolderPreference, setHasLoadedFolderPreference] = useState(false);
   const [isMapStyleDropdownOpen, setIsMapStyleDropdownOpen] = useState(false);
   const [isFilterModeDropdownOpen, setIsFilterModeDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasAppliedInitialDefaultSelectionRef = useRef(false);
   
   // Friends and sharing state
   const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
@@ -584,62 +588,208 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return markers.filter(marker => marker.tags?.includes(tagName)).length;
   };
 
-  // Load favorite colors from Supabase or localStorage
+  const isFolderEligibleForDefault = useCallback((folder: Folder): boolean => {
+    if (folder.isShared) {
+      return folder.sharePermission === 'edit';
+    }
+
+    if (!user) {
+      return true;
+    }
+
+    return folder.userId === user.uid || !folder.userId;
+  }, [user]);
+
+  const saveDefaultFolderPreference = useCallback(async (folderId: string | null) => {
+    const normalizedFolderId = folderId && folderId.trim() ? folderId : null;
+
+    if (normalizedFolderId) {
+      localStorage.setItem('defaultFolderId', normalizedFolderId);
+    } else {
+      localStorage.removeItem('defaultFolderId');
+    }
+
+    setDefaultFolderId(normalizedFolderId);
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          favoriteColors,
+          defaultMapStyle,
+          defaultFolderId: normalizedFolderId,
+          userId: user.uid,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Failed to save default folder to Supabase:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('❌ Error saving default folder preference:', error);
+    }
+  }, [defaultMapStyle, favoriteColors, user]);
+
+  // Reset startup selection logic when auth user changes
   useEffect(() => {
-    const loadFavoriteColors = async () => {
+    hasAppliedInitialDefaultSelectionRef.current = false;
+    setHasLoadedFolderPreference(false);
+  }, [user?.uid]);
+
+  // Load preferences from Supabase or localStorage
+  useEffect(() => {
+    const loadPreferences = async () => {
+      let loadedFavoriteColors: string[] = [];
+      let loadedDefaultMapStyle = 'mapbox://styles/mapbox/dark-v11';
+      let loadedDefaultFolderId: string | null = null;
+
+      const loadFromLocalStorage = () => {
+        const savedColors = localStorage.getItem('favoriteColors');
+        const savedMapStyle = localStorage.getItem('defaultMapStyle');
+        const savedDefaultFolderId = localStorage.getItem('defaultFolderId');
+
+        if (savedColors) {
+          try {
+            loadedFavoriteColors = JSON.parse(savedColors);
+          } catch {
+            loadedFavoriteColors = [];
+          }
+        }
+
+        if (savedMapStyle) {
+          loadedDefaultMapStyle = savedMapStyle;
+        }
+
+        loadedDefaultFolderId = savedDefaultFolderId && savedDefaultFolderId.trim()
+          ? savedDefaultFolderId
+          : null;
+      };
+
       if (user) {
         // User is signed in - load from Supabase
         try {
           const response = await fetch(`/api/preferences?userId=${user.uid}`);
           if (response.ok) {
-            const { favoriteColors, defaultMapStyle } = await response.json();
-            setFavoriteColors(favoriteColors || []);
-            localStorage.setItem('favoriteColors', JSON.stringify(favoriteColors || []));
-            if (defaultMapStyle) {
-              setDefaultMapStyle(defaultMapStyle);
-              localStorage.setItem('defaultMapStyle', defaultMapStyle);
+            const { favoriteColors, defaultMapStyle, defaultFolderId } = await response.json();
+
+            loadedFavoriteColors = Array.isArray(favoriteColors) ? favoriteColors : [];
+            loadedDefaultMapStyle = defaultMapStyle || loadedDefaultMapStyle;
+            loadedDefaultFolderId = typeof defaultFolderId === 'string' && defaultFolderId.trim()
+              ? defaultFolderId
+              : null;
+
+            localStorage.setItem('favoriteColors', JSON.stringify(loadedFavoriteColors));
+            localStorage.setItem('defaultMapStyle', loadedDefaultMapStyle);
+            if (loadedDefaultFolderId) {
+              localStorage.setItem('defaultFolderId', loadedDefaultFolderId);
+            } else {
+              localStorage.removeItem('defaultFolderId');
             }
-            console.log('✅ Loaded preferences from Supabase:', { favoriteColors, defaultMapStyle });
+
+            console.log('✅ Loaded preferences from Supabase:', {
+              favoriteColors: loadedFavoriteColors,
+              defaultMapStyle: loadedDefaultMapStyle,
+              defaultFolderId: loadedDefaultFolderId,
+            });
           } else {
             const errorText = await response.text();
-            console.error('Failed to load favorite colors from Supabase:', response.status, errorText);
-            // Fall back to localStorage
-            const saved = localStorage.getItem('favoriteColors');
-            if (saved) {
-              try {
-                setFavoriteColors(JSON.parse(saved));
-              } catch {
-                setFavoriteColors([]);
-              }
-            }
+            console.error('Failed to load preferences from Supabase:', response.status, errorText);
+            loadFromLocalStorage();
           }
         } catch (error) {
-          console.error('Error loading favorite colors:', error);
-          // Fall back to localStorage
-          const saved = localStorage.getItem('favoriteColors');
-          if (saved) {
-            try {
-              setFavoriteColors(JSON.parse(saved));
-            } catch {
-              setFavoriteColors([]);
-            }
-          }
+          console.error('Error loading preferences:', error);
+          loadFromLocalStorage();
         }
       } else {
         // User is signed out - load from localStorage
-        const saved = localStorage.getItem('favoriteColors');
-        if (saved) {
-          try {
-            setFavoriteColors(JSON.parse(saved));
-          } catch {
-            setFavoriteColors([]);
-          }
-        }
+        loadFromLocalStorage();
       }
+
+      setFavoriteColors(loadedFavoriteColors);
+      setDefaultMapStyle(loadedDefaultMapStyle);
+      setDefaultFolderId(loadedDefaultFolderId);
+      setHasLoadedFolderPreference(true);
     };
 
-    loadFavoriteColors();
+    loadPreferences();
   }, [user]);
+
+  // Resolve and apply default selected folder once per auth session on startup.
+  useEffect(() => {
+    if (!hasLoadedFolderPreference) return;
+    if (hasAppliedInitialDefaultSelectionRef.current) return;
+    if (folders.length === 0) return;
+
+    const eligibleFolders = folders.filter(isFolderEligibleForDefault);
+
+    if (eligibleFolders.length === 0) {
+      if (selectedFolderId !== null) {
+        setSelectedFolderId(null);
+      }
+      if (defaultFolderId !== null) {
+        void saveDefaultFolderPreference(null);
+      }
+      hasAppliedInitialDefaultSelectionRef.current = true;
+      return;
+    }
+
+    const hasValidSavedDefault = !!defaultFolderId && eligibleFolders.some(folder => folder.id === defaultFolderId);
+    const resolvedFolderId = hasValidSavedDefault ? defaultFolderId! : eligibleFolders[0].id;
+
+    if (selectedFolderId !== resolvedFolderId) {
+      setSelectedFolderId(resolvedFolderId);
+    }
+
+    if (defaultFolderId !== resolvedFolderId) {
+      void saveDefaultFolderPreference(resolvedFolderId);
+    }
+
+    hasAppliedInitialDefaultSelectionRef.current = true;
+  }, [
+    defaultFolderId,
+    folders,
+    hasLoadedFolderPreference,
+    isFolderEligibleForDefault,
+    saveDefaultFolderPreference,
+    selectedFolderId,
+    setSelectedFolderId,
+  ]);
+
+  // Keep saved default folder valid if folders/permissions change after initial load.
+  useEffect(() => {
+    if (!hasLoadedFolderPreference) return;
+    if (!defaultFolderId) return;
+
+    const currentDefaultFolder = folders.find(folder => folder.id === defaultFolderId);
+    if (currentDefaultFolder && isFolderEligibleForDefault(currentDefaultFolder)) {
+      return;
+    }
+
+    const eligibleFolders = folders.filter(isFolderEligibleForDefault);
+    const fallbackFolderId = eligibleFolders[0]?.id || null;
+
+    if (selectedFolderId === defaultFolderId) {
+      setSelectedFolderId(fallbackFolderId);
+    }
+
+    void saveDefaultFolderPreference(fallbackFolderId);
+  }, [
+    defaultFolderId,
+    folders,
+    hasLoadedFolderPreference,
+    isFolderEligibleForDefault,
+    saveDefaultFolderPreference,
+    selectedFolderId,
+    setSelectedFolderId,
+  ]);
 
   // Close map style dropdown when clicking outside
   useEffect(() => {
@@ -681,7 +831,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ favoriteColors: colors, defaultMapStyle, userId: user.uid }),
+          body: JSON.stringify({
+            favoriteColors: colors,
+            defaultMapStyle,
+            defaultFolderId,
+            userId: user.uid,
+          }),
         });
         
         if (response.ok) {
@@ -713,7 +868,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ favoriteColors, defaultMapStyle: style, userId: user.uid }),
+          body: JSON.stringify({
+            favoriteColors,
+            defaultMapStyle: style,
+            defaultFolderId,
+            userId: user.uid,
+          }),
         });
         
         if (response.ok) {
@@ -784,11 +944,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     await saveFavoriteColors(reordered);
   };
 
+  const handleSetDefaultFolder = async (folderId: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder || !isFolderEligibleForDefault(folder)) return;
+
+    await saveDefaultFolderPreference(folderId);
+    setSelectedFolderId(folderId);
+  };
+
   const renderFolder = (folder: Folder, level: number = 0) => {
     const hasChildren = getChildFolders(folder.id).length > 0;
     const isExpanded = expandedFolders.has(folder.id);
     const markerCount = getMarkerCount(folder.id);
     const isSelected = selectedFolderId === folder.id;
+    const isDefault = defaultFolderId === folder.id;
+    const canSetAsDefault = isFolderEligibleForDefault(folder);
 
     return (
       <div key={folder.id} className="select-none">
@@ -824,6 +994,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <span className="text-xs text-gray-400">({markerCount})</span>
           </div>
           <div className="flex items-center gap-1">
+            {canSetAsDefault && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleSetDefaultFolder(folder.id);
+                }}
+                className="p-1 hover:bg-gray-600 rounded"
+                title={isDefault ? 'Default folder' : 'Set as default folder'}
+              >
+                <Star size={14} className={isDefault ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'} />
+              </button>
+            )}
             {user && !folder.isShared && folder.userId === user.uid && (
               <button
                 onClick={(e) => {
@@ -890,6 +1072,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const renderSharedFolder = (folder: Folder) => {
     const markerCount = getMarkerCount(folder.id);
     const isSelected = selectedFolderId === folder.id;
+    const isDefault = defaultFolderId === folder.id;
+    const canSetAsDefault = isFolderEligibleForDefault(folder);
 
     return (
       <div
@@ -919,6 +1103,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {canSetAsDefault && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleSetDefaultFolder(folder.id);
+              }}
+              className="p-1 hover:bg-gray-600 rounded"
+              title={isDefault ? 'Default folder' : 'Set as default folder'}
+            >
+              <Star size={14} className={isDefault ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'} />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
