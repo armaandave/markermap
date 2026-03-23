@@ -12,6 +12,7 @@ cloudinary.config({
 
 export async function POST(request: NextRequest) {
   try {
+    const baseUrl = new URL(request.url).origin;
     const formData = await request.formData();
     const kmlFile = formData.get('kmlFile') as File;
     const imageFiles = formData.getAll('imageFiles') as File[];
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     
     try {
       // Sync folders
-      const foldersResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/sync/folders`, {
+      const foldersResponse = await fetch(`${baseUrl}/api/sync/folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folders: foldersWithUserId, userId }),
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Sync markers
-      const markersResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/sync/markers`, {
+      const markersResponse = await fetch(`${baseUrl}/api/sync/markers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markers: markersWithUserId, userId }),

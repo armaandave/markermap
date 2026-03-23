@@ -4,6 +4,7 @@ import { Marker } from '../../../lib/db';
 
 export async function POST(request: NextRequest) {
   try {
+    const baseUrl = new URL(request.url).origin;
     // Check if Supabase is properly configured
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.warn('🚨 Supabase not configured');
@@ -29,7 +30,6 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Parsed KML: ${parsedKML.markers.length} markers with timestamps`);
 
     // Fetch current markers from Supabase using the sync endpoint
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const markersResponse = await fetch(`${baseUrl}/api/sync/markers?userId=${userId}`);
     
     if (!markersResponse.ok) {
@@ -112,4 +112,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

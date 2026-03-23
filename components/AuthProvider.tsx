@@ -6,6 +6,8 @@ import { useAuth, AuthUser } from '../hooks/useAuth';
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  googleOAuthEnabled: boolean;
+  googleOAuthDisabledReason: string | null;
   signInWithGoogle: () => void;
   logout: () => void;
   setAuthUser: (user: AuthUser) => void;

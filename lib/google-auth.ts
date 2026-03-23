@@ -1,69 +1,76 @@
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
-// Get redirect URI - always auto-detect, ignore environment variable for production
 interface RedirectOptions {
   baseUrl?: string;
 }
 
+interface OAuthAvailability {
+  allowed: boolean;
+  reason: string | null;
+}
+
+const normalizeBaseUrl = (value: string) => {
+  if (!value) return value;
+  const trimmed = value.replace(/\/+$/, '');
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('localhost') || trimmed.startsWith('127.0.0.1')) {
+    return `http://${trimmed}`;
+  }
+  return `https://${trimmed}`;
+};
+
+export const getCanonicalSiteHost = () => {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!configuredSiteUrl) return null;
+
+  try {
+    return new URL(normalizeBaseUrl(configuredSiteUrl)).hostname;
+  } catch {
+    return null;
+  }
+};
+
+export const canUseGoogleOAuthOnCurrentHost = (): OAuthAvailability => {
+  if (typeof window === 'undefined') {
+    return { allowed: true, reason: null };
+  }
+
+  const hostname = window.location.hostname;
+  const canonicalHost = getCanonicalSiteHost();
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
+  if (isLocalhost) {
+    return { allowed: true, reason: null };
+  }
+
+  if (canonicalHost && hostname === canonicalHost) {
+    return { allowed: true, reason: null };
+  }
+
+  const targetDomain = canonicalHost ? `https://${canonicalHost}` : 'the production domain';
+  return {
+    allowed: false,
+    reason: `Google sign-in is disabled on preview URLs. Use ${targetDomain}.`,
+  };
+};
+
 export const getGoogleRedirectUri = (options: RedirectOptions = {}) => {
-  // Auto-detect based on environment
   if (typeof window !== 'undefined') {
-    // Client-side: use current domain
     const uri = `${window.location.origin}/auth/callback`;
     console.log('🔍 Client-side redirect URI:', uri);
     return uri;
-  } else {
-    // Server-side: Check if we're in production vs preview
-    const vercelEnv = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV;
-    const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL || 'markermap-nine.vercel.app';
-    const vercelUrl = process.env.VERCEL_URL;
-    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-
-    const normalizeBaseUrl = (value: string) => {
-      if (!value) return value;
-      const trimmed = value.replace(/\/+$/, '');
-      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-        return trimmed;
-      }
-      if (trimmed.startsWith('localhost') || trimmed.startsWith('127.0.0.1')) {
-        return `http://${trimmed}`;
-      }
-      return `https://${trimmed}`;
-    };
-
-    const determineBaseUrl = () => {
-      if (vercelEnv === 'production') {
-        return normalizeBaseUrl(productionDomain);
-      }
-      if (vercelUrl) {
-        return normalizeBaseUrl(vercelUrl);
-      }
-      if (configuredSiteUrl) {
-        return normalizeBaseUrl(configuredSiteUrl);
-      }
-      if (process.env.NODE_ENV === 'production') {
-        return normalizeBaseUrl(productionDomain);
-      }
-      return 'http://localhost:3000';
-    };
-
-    const baseUrlOverride = options.baseUrl ? normalizeBaseUrl(options.baseUrl) : undefined;
-    const baseUrl = baseUrlOverride ?? determineBaseUrl();
-
-    const uri = `${baseUrl}/auth/callback`;
-
-    console.log(
-      '🔍 Server-side redirect URI:',
-      uri,
-      'Environment:',
-      vercelEnv,
-      'VERCEL_URL:',
-      vercelUrl,
-      'Production domain:',
-      productionDomain
-    );
-    return uri;
   }
+
+  const baseUrlOverride = options.baseUrl ? normalizeBaseUrl(options.baseUrl) : undefined;
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const configuredBaseUrl = configuredSiteUrl ? normalizeBaseUrl(configuredSiteUrl) : undefined;
+  const baseUrl = baseUrlOverride ?? configuredBaseUrl ?? 'http://localhost:3000';
+
+  const uri = `${baseUrl}/auth/callback`;
+  console.log('🔍 Server-side redirect URI:', uri);
+  return uri;
 };
 
 if (!GOOGLE_CLIENT_ID) {
@@ -71,6 +78,11 @@ if (!GOOGLE_CLIENT_ID) {
 }
 
 export const getGoogleAuthUrl = () => {
+  const oauthAvailability = canUseGoogleOAuthOnCurrentHost();
+  if (!oauthAvailability.allowed) {
+    throw new Error(oauthAvailability.reason || 'Google sign-in is not available on this host');
+  }
+
   const redirectUri = getGoogleRedirectUri();
   console.log('🔍 Generated Google Auth URL with redirect URI:', redirectUri);
   

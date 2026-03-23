@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getGoogleAuthUrl } from '../lib/google-auth';
+import { canUseGoogleOAuthOnCurrentHost, getGoogleAuthUrl } from '../lib/google-auth';
 
 export interface AuthUser {
   uid: string;
@@ -11,6 +11,8 @@ export interface AuthUser {
 export const useAuth = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(true);
+  const [googleOAuthDisabledReason, setGoogleOAuthDisabledReason] = useState<string | null>(null);
 
   console.log('🔐 useAuth: Hook initialized. Loading state:', loading);
 
@@ -57,7 +59,22 @@ export const useAuth = () => {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const availability = canUseGoogleOAuthOnCurrentHost();
+    setGoogleOAuthEnabled(availability.allowed);
+    setGoogleOAuthDisabledReason(availability.reason);
+  }, []);
+
   const signInWithGoogle = () => {
+    const availability = canUseGoogleOAuthOnCurrentHost();
+    setGoogleOAuthEnabled(availability.allowed);
+    setGoogleOAuthDisabledReason(availability.reason);
+
+    if (!availability.allowed) {
+      console.warn('🔐 useAuth: Google sign-in blocked for current host:', availability.reason);
+      return;
+    }
+
     console.log('🔐 useAuth: Starting Google sign-in...');
     const authUrl = getGoogleAuthUrl();
     console.log('🔐 useAuth: Redirecting to:', authUrl);
@@ -89,6 +106,8 @@ export const useAuth = () => {
   return {
     user,
     loading,
+    googleOAuthEnabled,
+    googleOAuthDisabledReason,
     signInWithGoogle,
     logout,
     setAuthUser,

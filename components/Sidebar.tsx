@@ -42,7 +42,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { user, loading, signInWithGoogle, logout } = useAuthContext();
+  const { user, loading, googleOAuthEnabled, googleOAuthDisabledReason, signInWithGoogle, logout } = useAuthContext();
   const {
     folders,
     markers,
@@ -995,13 +995,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 </p>
                 <button
                   onClick={handleSignIn}
-                  className="w-full flex items-center gap-2 p-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
+                  disabled={!googleOAuthEnabled}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors text-sm ${
+                    googleOAuthEnabled
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
                   <LogIn size={16} />
                   Sign in with Google
                 </button>
                 <p className="text-xs text-gray-500">
-                  You will be redirected to Google for sign-in
+                  {googleOAuthEnabled
+                    ? 'You will be redirected to Google for sign-in'
+                    : googleOAuthDisabledReason || 'Google sign-in is unavailable on this host.'}
                 </p>
               </div>
             )}
