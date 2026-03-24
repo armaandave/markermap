@@ -26,6 +26,8 @@ const MapboxMap = dynamic(() => import('../components/MapboxMap'), {
 });
 
 export default function Home() {
+  const PREVIEW_CARD_HEIGHT = '14rem';
+
   const { user, loading: authLoading } = useAuthContext();
   // We're in a 'use client' component, so we're always on the client side
   const [isClient] = useState(true);
@@ -57,19 +59,19 @@ export default function Home() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const previewRef = React.useRef<HTMLDivElement>(null);
 
-  // Sync preview height to images
+  // Sync preview width to the side image strip layout
   useEffect(() => {
     if (previewRef.current && selectedMarker) {
-      const updateHeight = () => {
-        const height = previewRef.current?.offsetHeight;
-        if (height) {
-          document.documentElement.style.setProperty('--preview-height', `${height}px`);
+      const updateDimensions = () => {
+        const width = previewRef.current?.offsetWidth;
+        if (width) {
+          document.documentElement.style.setProperty('--preview-width', `${width}px`);
         }
       };
       
       // Update immediately and on resize
-      updateHeight();
-      const observer = new ResizeObserver(updateHeight);
+      updateDimensions();
+      const observer = new ResizeObserver(updateDimensions);
       observer.observe(previewRef.current);
       
       return () => observer.disconnect();
@@ -415,7 +417,11 @@ export default function Home() {
         {selectedMarker && (
           <>
             {/* Preview Box - Natural height */}
-            <div ref={previewRef} className="absolute bottom-4 left-4 lg:w-80 bg-gray-800 rounded-lg p-4 shadow-lg z-10 max-h-90 overflow-y-auto">
+            <div
+              ref={previewRef}
+              className="absolute bottom-4 left-4 w-72 max-w-[calc(100vw-6rem)] bg-gray-800 rounded-lg p-4 shadow-lg z-10 overflow-y-auto"
+              style={{ height: PREVIEW_CARD_HEIGHT }}
+            >
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-white">{selectedMarker.title}</h3>
                 <div className="flex items-center gap-2">
@@ -471,15 +477,19 @@ export default function Home() {
             {/* Images - Separate, positioned to match preview height with JS */}
             {selectedMarker.images && selectedMarker.images.length > 0 && (
               <div 
-                className="absolute bottom-4 left-[calc(1rem+20rem+0.5rem)] hidden lg:flex gap-2 z-10"
-                style={{ height: 'var(--preview-height, auto)' }}
+                className="absolute bottom-4 z-10 flex gap-2 overflow-x-auto overflow-y-hidden pb-1"
+                style={{
+                  left: 'calc(1rem + var(--preview-width, 18rem) + 0.5rem)',
+                  height: PREVIEW_CARD_HEIGHT,
+                  maxWidth: 'calc(100vw - (1rem + var(--preview-width, 18rem) + 1.5rem))',
+                }}
               >
                 {selectedMarker.images.slice(0, 5).map((imageUrl, index) => (
                   <img
                     key={index}
                     src={imageUrl}
                     alt={`${selectedMarker.title} - Image ${index + 1}`}
-                    className="h-full w-auto object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-gray-600 shadow-lg bg-gray-800"
+                    className="h-full w-auto flex-shrink-0 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-gray-600 shadow-lg bg-gray-800"
                     onClick={() => {
                       const images = selectedMarker.images ?? [];
                       setGalleryImages(images);

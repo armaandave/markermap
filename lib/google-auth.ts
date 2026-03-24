@@ -40,8 +40,18 @@ export const canUseGoogleOAuthOnCurrentHost = (): OAuthAvailability => {
   const hostname = window.location.hostname;
   const canonicalHost = getCanonicalSiteHost();
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  const isNgrokHost =
+    hostname.endsWith('.ngrok-free.app') ||
+    hostname.endsWith('.ngrok-free.dev') ||
+    hostname.endsWith('.ngrok.io');
+  const isDevelopment = process.env.NODE_ENV === 'development';
 
   if (isLocalhost) {
+    return { allowed: true, reason: null };
+  }
+
+  // Allow tunnel hosts during local development for mobile debugging.
+  if (isDevelopment && isNgrokHost) {
     return { allowed: true, reason: null };
   }
 
